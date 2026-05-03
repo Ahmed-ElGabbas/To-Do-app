@@ -1,0 +1,32 @@
+name: antigravity
+description: "A Flutter Todo App with White & Orange design system."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  provider: ^6.1.1
+  shared_preferences: ^2.2.2
+  google_fonts: ^6.1.0
+  uuid: ^4.3.3
+  intl: ^0.20.2
+  url_launcher: ^6.2.5
+  image_picker: ^1.0.7
+  share_plus: ^7.2.1
+  table_calendar: ^3.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
