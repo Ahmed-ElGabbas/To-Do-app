@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:antigravity/core/constants/colors.dart';
-import 'package:antigravity/core/constants/sizes.dart';
-import 'package:antigravity/core/theme/text_styles.dart';
+import 'package:tasko/core/constants/colors.dart';
+import 'package:tasko/core/constants/sizes.dart';
+import 'package:tasko/core/theme/text_styles.dart';
 
 class PriorityChip extends StatelessWidget {
   final String label;
@@ -15,22 +15,23 @@ class PriorityChip extends StatelessWidget {
     required this.onTap,
   });
 
-  Color _getChipColor() {
+  Color _getChipColor(ThemeData theme) {
     switch (label.toLowerCase()) {
       case 'high':
-        return AppColors.highPriority;
+        return Colors.redAccent;
       case 'medium':
-        return AppColors.mediumPriority;
+        return theme.primaryColor;
       case 'low':
-        return AppColors.lowPriority;
+        return Colors.blueAccent;
       default:
-        return AppColors.mediumPriority;
+        return theme.primaryColor;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final chipColor = _getChipColor();
+    final theme = Theme.of(context);
+    final chipColor = _getChipColor(theme);
 
     return GestureDetector(
       onTap: onTap,
@@ -51,7 +52,7 @@ class PriorityChip extends StatelessWidget {
         child: Text(
           label,
           style: AppTextStyles.labelMedium.copyWith(
-            color: isSelected ? AppColors.white : chipColor,
+            color: isSelected ? Colors.white : chipColor,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
           ),
         ),

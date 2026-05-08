@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:antigravity/core/constants/colors.dart';
-import 'package:antigravity/core/constants/strings.dart';
-import 'package:antigravity/core/constants/sizes.dart';
-import 'package:antigravity/core/theme/text_styles.dart';
-import 'package:antigravity/features/auth/state/auth_provider.dart';
-import 'package:antigravity/features/todo/presentation/widgets/main_scaffold.dart';
-import 'package:antigravity/features/auth/presentation/screens/login_screen.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:tasko/core/constants/colors.dart';
+import 'package:tasko/core/constants/sizes.dart';
+import 'package:tasko/core/localization/app_localizations.dart';
+import 'package:tasko/features/auth/state/auth_provider.dart';
+import 'package:tasko/features/todo/presentation/widgets/main_scaffold.dart';
+import 'package:tasko/features/auth/presentation/screens/login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -42,7 +42,9 @@ class _SplashScreenState extends State<SplashScreen>
 
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
-      final isLoggedIn = context.read<AuthProvider>().isLoggedIn;
+      final auth = context.read<AuthProvider>();
+      final isLoggedIn = auth.isLoggedIn;
+
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) =>
@@ -64,17 +66,12 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.primary, AppColors.primaryDark],
-          ),
-        ),
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Center(
         child: FadeTransition(
           opacity: _fadeAnimation,
           child: ScaleTransition(
@@ -83,18 +80,60 @@ class _SplashScreenState extends State<SplashScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: AppSizes.splashIconSize,
-                  height: AppSizes.splashIconSize,
+                  width: 120,
+                  height: 120,
                   decoration: BoxDecoration(
-                    color: AppColors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(AppSizes.radiusXl),
+                    color: theme.primaryColor,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: theme.primaryColor.withValues(alpha: 0.2),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
                   ),
-                  child: const Icon(Icons.check_rounded, size: 48, color: AppColors.white),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Image.asset(
+                      'assets/images/app_icon.png',
+                      width: 120,
+                      height: 120,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Center(
+                          child: Text(
+                            'T',
+                            style: GoogleFonts.poppins(
+                              fontSize: 56,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
-                const SizedBox(height: AppSizes.lg),
-                Text(AppStrings.appName, style: AppTextStyles.splashTitle),
-                const SizedBox(height: AppSizes.sm),
-                Text(AppStrings.appTagline, style: AppTextStyles.splashSubtitle),
+                const SizedBox(height: AppSizes.xl),
+                Text(
+                  l10n.get('app_name'),
+                  style: GoogleFonts.poppins(
+                    fontSize: 40,
+                    fontWeight: FontWeight.w800,
+                    color: theme.primaryColor,
+                  ),
+                ),
+                const SizedBox(height: AppSizes.xs),
+                Text(
+                  l10n.get('organize'),
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    letterSpacing: 1.2,
+                  ),
+                ),
               ],
             ),
           ),

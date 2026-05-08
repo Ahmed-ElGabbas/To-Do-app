@@ -1,17 +1,42 @@
-# Flutter Todo App — Project Structure & Implementation Guide
+# Tasko App — Project Structure & Implementation Guide
 
 > **For Claude Code:** Read this file fully before writing any code. Follow the structure, design system, and conventions below exactly.
 
 ---
 
+## App Identity
+- **App Name:** Tasko (everywhere — AndroidManifest, Info.plist, UI, AppBar, Splash)
+- **App Slogan:** "Organize your day"
+- **App Icon:** assets/images/app_icon.png (books stack image)
+
+---
+
+## Implementation Status — All 8 Features Complete ✅
+
+| # | Feature | Status | Key Files |
+|---|---------|--------|-----------|
+| 1 | Splash Screen Icon (app_icon.png) | ✅ Done | `splash_screen.dart` |
+| 2 | Persistent Login (SharedPreferences) | ✅ Done | `auth_provider.dart`, `splash_screen.dart` |
+| 3 | Add Task Works (optimistic UI) | ✅ Done | `task_provider.dart`, `add_task_screen.dart` |
+| 4 | Calendar Add Task with Date | ✅ Done | `calendar_screen.dart`, `add_task_screen.dart` |
+| 5 | Completed Counter (real-time) | ✅ Done | `task_provider.dart`, `home_screen.dart` |
+| 6 | Local Notifications (no Firebase) | ✅ Done | `notification_service.dart`, `AndroidManifest.xml` |
+| 7 | Profile Picture Change | ✅ Done | `profile_screen.dart` |
+| 8 | Flat Task Row Style | ✅ Done | `task_card.dart` |
+
+---
+
 ## Design System
 
-**Theme:** White & Orange (default), supports Dark Mode  
-**Primary Color:** `#FF9F00`  
-**Background:** `#FFFFFF`  
-**Surface:** `#F7F7F7`  
-**Text Primary:** `#1A1A1A`  
-**Text Secondary:** `#AAAAAA`  
+**Theme:** White & Orange (default), supports Dark Mode
+**Primary Color:** `#FF9F00`
+**Background Light:** `#FFFFFF`
+**Background Dark:** `#1A1A1A`
+**Surface Light:** `#F7F7F7`
+**Surface Dark:** `#2A2A2A`
+**Text Primary Light:** `#1A1A1A`
+**Text Primary Dark:** `#FFFFFF`
+**Text Secondary:** `#AAAAAA`
 **Font:** Poppins (300, 400, 500, 600, 700, 800)
 
 ---
@@ -24,11 +49,11 @@ lib/
 ├── core/
 │   ├── constants/
 │   │   ├── colors.dart
-│   │   ├── strings.dart
+│   │   ├── strings.dart         # AppStrings + AppL10n (en/ar/fr)
 │   │   └── sizes.dart
 │   │
 │   ├── theme/
-│   │   ├── app_theme.dart
+│   │   ├── app_theme.dart       # light + dark ThemeData
 │   │   └── text_styles.dart
 │   │
 │   └── utils/
@@ -48,15 +73,15 @@ lib/
 │   └── todo/
 │       ├── data/
 │       │   ├── models/
-│       │   │   └── task_model.dart
+│       │   │   └── task_model.dart        # TaskModel.fromJson/toJson/encode/decode
 │       │   ├── datasources/
-│       │   │   └── local_data_source.dart
+│       │   │   └── local_data_source.dart # getTasks/saveTasks/addTask/updateTask/deleteTask
 │       │   └── repositories/
 │       │       └── task_repository_impl.dart
 │       │
 │       ├── domain/
 │       │   ├── entities/
-│       │   │   └── task.dart
+│       │   │   └── task.dart              # Task entity (id,title,time,date,isDone,priority,notes,notificationId)
 │       │   ├── repositories/
 │       │   │   └── task_repository.dart
 │       │   └── usecases/
@@ -67,37 +92,39 @@ lib/
 │       │
 │       └── presentation/
 │           ├── screens/
-│           │   ├── splash_screen.dart
-│           │   ├── home_screen.dart
-│           │   ├── tasks_screen.dart
-│           │   ├── calendar_screen.dart
-│           │   ├── profile_screen.dart
-│           │   ├── settings_screen.dart
-│           │   ├── add_task_screen.dart
+│           │   ├── splash_screen.dart     # ✅ Shows app_icon.png 120x120 rounded; routes on isLoggedIn
+│           │   ├── home_screen.dart       # ✅ Consumer<TaskProvider>; todayTasks/tomorrowTasks; completed counter
+│           │   ├── tasks_screen.dart      # ✅ All tasks; search; filter chips; completedCount chip
+│           │   ├── calendar_screen.dart   # ✅ TableCalendar; FAB adds task for selected date (YYYY-MM-DD)
+│           │   ├── profile_screen.dart    # ✅ image_picker integration; camera/gallery bottom sheet; persists path
+│           │   ├── settings_screen.dart   # ✅ Dark mode toggle; language picker; account settings
+│           │   ├── edit_profile_screen.dart
+│           │   ├── add_task_screen.dart   # ✅ Validates title; supports 'today'/'tomorrow'/'YYYY-MM-DD'; green ✓ FAB
 │           │   └── task_details_screen.dart
 │           │
 │           ├── widgets/
-│           │   ├── task_card.dart
+│           │   ├── task_card.dart         # ✅ Flat style: checkbox + name + time; no shadows/borders
 │           │   ├── custom_button.dart
 │           │   ├── input_field.dart
 │           │   ├── priority_chip.dart
 │           │   ├── side_drawer.dart
-│           │   └── main_scaffold.dart
+│           │   └── main_scaffold.dart     # ✅ backgroundColor:white; SystemUIOverlayStyle set in main.dart
 │           │
 │           └── state/
-│               ├── task_provider.dart
+│               ├── task_provider.dart     # ✅ Optimistic UI: list updated before I/O; allTasks alias; completedCount
 │               ├── task_state.dart
 │               └── settings_provider.dart
 │
 ├── shared/
 │   ├── services/
-│   │   ├── local_storage_service.dart
-│   │   └── email_service.dart
+│   │   ├── local_storage_service.dart    # ✅ SINGLETON pattern — init() in main.dart, reused everywhere
+│   │   ├── email_service.dart
+│   │   └── notification_service.dart     # ✅ init()+scheduleTaskNotification()+cancelNotification()+cancelAll()
 │   │
 │   └── widgets/
 │       └── loading_widget.dart
 │
-└── main.dart
+└── main.dart                             # ✅ SystemChrome white nav bar; LocalStorageService.init(); NotificationService.init()
 ```
 
 ---
@@ -105,254 +132,244 @@ lib/
 ## Screens Flow
 
 ```
-SplashScreen (2s)
-      ↓
-LoginScreen ──────────────────→ SignupScreen
-      ↓ (on login)
-MainScaffold (BottomNav + Drawer)
-  ├── HomeScreen       (tab 0)
-  ├── TasksScreen      (tab 1)
-  ├── CalendarScreen   (tab 2)
-  └── ProfileScreen    (tab 3)
-       └── SettingsScreen (from profile or drawer)
+SplashScreen (2s) → checks isLoggedIn
+      ├── true  → MainScaffold (skip login forever)
+      └── false → LoginScreen → SignupScreen
+                      ↓ (on login/signup — saved permanently)
+              MainScaffold (BottomNav + Drawer)
+                ├── HomeScreen       (tab 0)
+                ├── TasksScreen      (tab 1)
+                ├── CalendarScreen   (tab 2)  ← FAB adds task for selected date
+                └── ProfileScreen    (tab 3)  ← tap avatar to change profile picture
+                     └── SettingsScreen
 ```
+
+---
+
+## Feature Details
+
+### FEATURE 1 — Splash Screen Icon
+- `splash_screen.dart`: `Image.asset('assets/images/app_icon.png', width:120, height:120)` in `ClipRRect`
+- Fallback to "T" letter if image fails to load
+- Animation: fade + scale (1.2s) → 2s delay → route based on `isLoggedIn`
+
+### FEATURE 2 — Persistent Login
+- `AuthProvider.signUp()` and `AuthProvider.login()` both set `isLoggedIn = true` and persist to SharedPreferences
+- `SplashScreen` reads `context.read<AuthProvider>().isLoggedIn`
+- `AuthProvider.logout()` sets `isLoggedIn = false` → only triggered by Logout button in ProfileScreen
+
+### FEATURE 3 — Add Task (Instant UI)
+**Key pattern in `task_provider.dart`:**
+```dart
+Future<void> addTask(Task task) async {
+  _tasks.add(task);      // 1. Instant in-memory update
+  notifyListeners();     // 2. UI rebuilds immediately
+  try {
+    await _addTask(task); // 3. Persist to SharedPreferences
+    // schedule notification
+  } catch (e) {
+    _tasks.removeWhere((t) => t.id == task.id); // rollback on failure
+    notifyListeners();
+  }
+}
+```
+- Same optimistic pattern for `toggleDone()`, `deleteTask()`, `updateTask()`
+- `LocalStorageService` is a **singleton** — `factory LocalStorageService() => _instance` — ensures the instance initialized in `main()` is always reused
+
+### FEATURE 4 — Calendar Add Task with Date
+- `CalendarScreen` has a FAB that calls `_addTaskForDate(context)`
+- Converts `_selectedDay` to `'today'`, `'tomorrow'`, or `'yyyy-MM-dd'` string
+- `AddTaskScreen(initialDate: dateArg)` accepts all three formats
+- When `initialDate` is YYYY-MM-DD (`_isCustomDate == true`), a third chip shows the formatted date
+- `TaskProvider.todayTasks` / `tomorrowTasks` also resolve YYYY-MM-DD strings matching today/tomorrow
+
+### FEATURE 5 — Completed Counter
+- `TaskProvider.completedCount` getter: `_tasks.where((t) => t.isDone).length`
+- `home_screen.dart`: `Consumer<TaskProvider>` rebuilds greeting card with `$doneTasks / $total completed`
+- `tasks_screen.dart`: shows `$completedCount tasks completed ✓` chip — updates in real time via same Consumer
+
+### FEATURE 6 — Local Notifications
+- `NotificationService.init()` called in `main()` before `runApp()`
+- Requests Android 13+ permission on first launch
+- `scheduleTaskNotification()` called inside `TaskProvider.addTask()` after persistence
+- `cancelNotification()` called inside `TaskProvider.deleteTask()` using `task.notificationId`
+- `task.notificationId` = `id.hashCode.abs() % 2147483647` (stable, derived from task UUID)
+- Silent fail for all notification ops (best-effort, never crashes app)
+
+**AndroidManifest.xml permissions:**
+```xml
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+<uses-permission android:name="android.permission.VIBRATE"/>
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+```
+
+### FEATURE 7 — Profile Picture Change
+- `ProfileScreen` renders `_TappableAvatar` (StatelessWidget)
+- Tapping opens a `showModalBottomSheet` with Camera / Gallery options
+- `ImagePicker().pickImage(source: source, imageQuality: 80)` returns path
+- Path saved via `AuthProvider.updateProfile(profileImagePath: picked.path)`
+- Displayed via `Image.file(File(auth.profileImagePath))` with initials fallback
+
+### FEATURE 8 — Flat Task Row Style
+`task_card.dart` uses `InkWell` + plain `Container(color: AppColors.background)`:
+- No `BoxShadow`, no `border`, no card elevation
+- Layout: `[checkbox 24x24] [title + time (Expanded)] [priority strip 4x36]`
+- Pending: empty orange square checkbox
+- Done: filled orange checkbox with white `✓` + strikethrough title + grey time
 
 ---
 
 ## Auth Feature
 
-### login_screen.dart
-- White background, Poppins font
-- Orange app logo icon at top (rounded square)
-- Title: "Welcome Back!" bold black, subtitle: "Sign in to manage your tasks" grey
-- Email field (white bg, orange border on focus, rounded 12px)
-- Password field with show/hide eye toggle icon in orange
-- "Forgot Password?" text link aligned right in orange
-- Orange filled "Sign In" button (full width, rounded 14px, bold white text)
-- "Don't have an account? Sign Up" centered at bottom — "Sign Up" in orange
-- On tap Sign In: validate fields, save user to SharedPreferences, navigate to MainScaffold
-- No real backend — just local validation
-
-### signup_screen.dart
-- Same white & orange design as login
-- Fields: Full Name, Email, Password, Phone Number, Country, Bio (optional)
-- Profile picture picker (image_picker) — circular avatar at top with orange camera icon
-- Orange "Create Account" button
-- "Already have an account? Login" link in orange
-- On signup: save all user data to SharedPreferences via AuthProvider
-- Navigate to LoginScreen after success
-
 ### auth_provider.dart
 - ChangeNotifier
-- Stores: name, email, password, phone, country, bio, profileImagePath
-- Methods: `signUp()`, `login()`, `logout()`, `updateProfile()`, `changeEmail()`, `changePassword()`
-- Persists all data in SharedPreferences
-- `isLoggedIn` bool — checked in SplashScreen to skip login if already logged in
+- Fields: name, email, password, phone, country, bio, **profileImagePath**, isLoggedIn
+- Methods: `signUp()`, `login()`, `logout()`, `updateProfile()`, `changeEmail()`, `changePassword()`, `loadUser()`
+- ALL data persisted in SharedPreferences immediately via `_save()`
+- `isLoggedIn=true` saved on first login/signup and NEVER cleared unless user taps Logout
+- `loadUser()` called on app start to restore full session
 
 ---
 
 ## Bottom Navigation (main_scaffold.dart)
 
-4 tabs with icons and labels:
+4 tabs:
 - **Home** — house icon (tab 0)
 - **Tasks** — checklist icon (tab 1)
 - **Calendar** — calendar icon (tab 2)
 - **Profile** — person icon (tab 3)
 
-Style (exactly like reference image 3):
-- White background bottom nav bar with elevated shadow and rounded top corners
-- Active tab: orange icon + orange bold label + small orange dot below icon
-- Inactive tab: grey icon + grey label
-- Clean white style — no colored background bar
-- The drawer hamburger icon (☰) appears in the AppBar top-left on all main screens
+Style:
+- `backgroundColor: AppColors.white` on Scaffold
+- White nav bar with rounded top corners, subtle shadow
+- Active: orange icon + orange bold label + small orange dot below
+- Hamburger (☰) in AppBar top-left opens SideDrawer on all tabs
 
 ---
 
-## Side Drawer (side_drawer.dart)
+## Task Entity
 
-Dark background drawer (color: `#12121F`), white text — same dark style as reference image 1.
-
-### Header section:
-- Circular profile picture (from SharedPreferences path, or default orange avatar with initials)
-- User's full name in white bold (18px)
-- User's email in grey below name (13px)
-- Subtle divider below header
-
-### MAIN MENU section label (grey uppercase small text):
-- 🏠 Home → navigate to HomeScreen (tab 0)
-- ✅ Task Lists → navigate to TasksScreen (tab 1)
-- 🗑️ Remove Tasks → show AlertDialog "Delete all tasks?" with Cancel / Delete buttons. On confirm: clear all tasks via TaskProvider
-
-### ACTIONS section label:
-- 💬 Send Feedback → use url_launcher to open:
-  `mailto:ahmed.mahmoud.elgabbas@gmail.com?subject=App%20Feedback&body=Hi%2C%20I%20want%20to%20share%20feedback%20about%20the%20app.`
-- 👥 Follow Us → open a modal bottom sheet (white card, rounded top 24px) with:
-  - "Follow Us" title in orange bold at top left
-  - Grey divider
-  - Facebook row: Facebook icon (blue) + "Facebook" text + chevron → launches `https://www.facebook.com/share/1BHmoqjc5b/`
-  - Instagram row: Instagram icon (pink/purple) + "Instagram" text + chevron → launches `https://www.instagram.com/elg.abbas?igsh=NWlvYzliNjdsb3Nz`
-  - Twitter row: X/Twitter icon (black) + "Twitter" text + chevron → launches `https://x.com/A7med_ElGabbas`
-  - Each row has a light grey divider between them
-  - Use `url_launcher` `launchUrl()` with `LaunchMode.externalApplication`
-- 👥 Invite Friends → use `share_plus` Share.share() with message: "Hey! Check out this amazing Todo app! [link]"
-- ⚙️ Settings → navigate to SettingsScreen
-
-All menu items: icon on left (24px, orange tint), label text white (15px), subtle divider between items, tap highlight in white/10% opacity.
-
----
-
-## Screens Detail
-
-### home_screen.dart
-- AppBar: hamburger menu (opens drawer) on left, app name center, notification bell right
-- Greeting card: "Good Morning, [Name] 👋" bold + date in grey + small progress summary
-- TODAY section header (bold uppercase) + orange (+) button
-- Task list for today with orange checkboxes
-- TOMORROW section header + orange (+) button
-- Task list for tomorrow
-- Done tasks: strikethrough grey text, filled orange checkbox with white checkmark
-- Orange FAB (+) at bottom right → navigate to AddTaskScreen
-
-### tasks_screen.dart
-- Title: "All My Tasks" bold
-- Search bar at top (white bg, orange border on focus)
-- Filter chips: All / Today / Tomorrow / Done / Pending (orange active chip)
-- Shows ALL tasks grouped by date
-- Each task card: orange checkbox, title, date badge, time, priority chip
-- Swipe left on task card → red delete action
-- Empty state: orange illustration + "No tasks yet! Add your first task"
-
-### calendar_screen.dart
-- Monthly calendar at top (use `table_calendar` package)
-- Orange highlight circle for selected day
-- Orange dot under days that have tasks
-- Below calendar: list of tasks for selected day
-- "No tasks for this day" empty state
-
-### profile_screen.dart
-- Circular profile picture (150px) — tap to change via image_picker
-- Full Name below (24px bold)
-- Email in grey
-- Info cards: Phone, Country, Bio
-- Orange "Edit Profile" button → dialog/sheet with editable fields
-- "Settings" row with arrow → SettingsScreen
-- Red "Logout" button at bottom → clears session → LoginScreen
-
-### settings_screen.dart
-
-**Account Settings section:**
-- Change Email → bottom sheet: current password + new email fields + orange Save button
-- Change Password → bottom sheet: old password + new password + confirm + orange Save button
-
-**Notifications section:**
-- "Push Notifications" toggle (orange Switch widget)
-
-**Appearance section:**
-- "Dark Mode" toggle (orange Switch) — toggles app theme immediately
-- "Language" row → bottom sheet with 3 options:
-  - 🇬🇧 English
-  - 🇸🇦 العربية
-  - 🇫🇷 Français
-  - Selected option shows orange checkmark
-  - Changing language calls `SettingsProvider.setLanguage()` and rebuilds app
-
-**Contact Us section:**
-- "Contact Us" row with mail icon → url_launcher opens:
-  `mailto:ahmed.mahmoud.elgabbas@gmail.com?subject=Support%20Request`
-
----
-
-## Key Implementation Notes
-
-### colors.dart
-```dart
-class AppColors {
-  static const Color primary = Color(0xFFFF9F00);
-  static const Color background = Color(0xFFFFFFFF);
-  static const Color surface = Color(0xFFF7F7F7);
-  static const Color textPrimary = Color(0xFF1A1A1A);
-  static const Color textSecondary = Color(0xFFAAAAAA);
-  static const Color border = Color(0xFFEFEFEF);
-  static const Color done = Color(0xFFCCCCCC);
-  static const Color drawerBg = Color(0xFF12121F);
-  static const Color drawerText = Color(0xFFFFFFFF);
-  static const Color drawerSubtext = Color(0xFF8888AA);
-  static const Color error = Color(0xFFE53935);
-}
-```
-
-### task.dart (Entity)
 ```dart
 class Task {
-  final String id;
+  final String id;           // UUID v4
   final String title;
-  final String time;
-  final String date;       // "today", "tomorrow", or "YYYY-MM-DD"
+  final String time;         // "06:00 AM"
+  final String date;         // "today", "tomorrow", or "YYYY-MM-DD"
   final bool isDone;
-  final String priority;   // "high", "medium", "low"
+  final String priority;     // "high", "medium", "low"
   final String? notes;
   final DateTime createdAt;
+  final int notificationId;  // id.hashCode.abs() % 2147483647
 }
 ```
 
-### settings_provider.dart
-```dart
-class SettingsProvider extends ChangeNotifier {
-  bool isDarkMode = false;
-  bool notificationsEnabled = true;
-  String language = 'en'; // 'en', 'ar', 'fr'
+---
 
-  void toggleDarkMode() { isDarkMode = !isDarkMode; _save(); notifyListeners(); }
-  void toggleNotifications() { notificationsEnabled = !notificationsEnabled; _save(); notifyListeners(); }
-  void setLanguage(String lang) { language = lang; _save(); notifyListeners(); }
-  Future<void> loadSettings() async { /* load from SharedPreferences */ }
-  Future<void> _save() async { /* save to SharedPreferences */ }
+## TaskProvider Getters
+
+```dart
+List<Task> get tasks       // all tasks (raw list)
+List<Task> get allTasks    // alias for tasks
+List<Task> get todayTasks  // date == 'today' OR YYYY-MM-DD matching today
+List<Task> get tomorrowTasks // date == 'tomorrow' OR YYYY-MM-DD matching tomorrow
+int get completedCount     // tasks.where((t) => t.isDone).length
+```
+
+---
+
+## LocalStorageService — Singleton Pattern
+
+```dart
+class LocalStorageService {
+  static final LocalStorageService _instance = LocalStorageService._internal();
+  factory LocalStorageService() => _instance;
+  LocalStorageService._internal();
+  late SharedPreferences _prefs;
+  Future<void> init() async { _prefs = await SharedPreferences.getInstance(); }
+  // read/write/delete/clear/hasKey
 }
 ```
 
-### email_service.dart
+**CRITICAL:** `LocalStorageService().init()` is called ONCE in `main()`. All providers use
+`LocalStorageService()` factory which returns the same singleton with the initialized `_prefs`.
+
+---
+
+## Notification Service
+
 ```dart
-// Uses url_launcher
-class EmailService {
-  static const String _devEmail = 'ahmed.mahmoud.elgabbas@gmail.com';
-
-  static Future<void> sendFeedback() async {
-    final uri = Uri.parse('mailto:$_devEmail?subject=App%20Feedback&body=Hi%2C%20I%20want%20to%20share%20feedback.');
-    await launchUrl(uri);
-  }
-
-  static Future<void> contactUs() async {
-    final uri = Uri.parse('mailto:$_devEmail?subject=Support%20Request');
-    await launchUrl(uri);
-  }
+class NotificationService {
+  static Future<void> init() async { ... }                          // call in main()
+  static Future<void> scheduleTaskNotification({id, title, scheduledTime}) async { ... }
+  static Future<void> cancelNotification(int id) async { ... }
+  static Future<void> cancelAll() async { ... }
+  static DateTime? parseTaskDateTime(String time, String date) { ... }
 }
 ```
 
-### main.dart
-```dart
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => TaskProvider()..loadTasks()),
-        ChangeNotifierProvider(create: (_) => AuthProvider()..loadUser()),
-        ChangeNotifierProvider(create: (_) => SettingsProvider()..loadSettings()),
-      ],
-      child: Consumer<SettingsProvider>(
-        builder: (context, settings, _) => MaterialApp(
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.light,
-          darkTheme: AppTheme.dark,
-          themeMode: settings.isDarkMode ? ThemeMode.dark : ThemeMode.light,
-          locale: Locale(settings.language),
-          supportedLocales: [Locale('en'), Locale('ar'), Locale('fr')],
-          home: SplashScreen(),
-        ),
-      ),
-    ),
-  );
-}
+`parseTaskDateTime` handles `'today'`, `'tomorrow'`, and `'YYYY-MM-DD'` date strings.
+
+---
+
+## Localization Strings (3 languages)
+
+All text supports English / Arabic / French via `AppL10n.t(key, lang)`.
+
+```
+hello:        "Hello"          / "مرحبا"        / "Bonjour"
+tasks:        "Tasks"          / "المهام"        / "Tâches"
+add_task:     "Add New Task"   / "إضافة مهمة"   / "Ajouter une tâche"
+settings:     "Settings"       / "الإعدادات"    / "Paramètres"
+profile:      "Profile"        / "الملف الشخصي"/ "Profil"
+home:         "Home"           / "الرئيسية"     / "Accueil"
+calendar:     "Calendar"       / "التقويم"      / "Calendrier"
+today:        "TODAY"          / "اليوم"        / "AUJOURD'HUI"
+tomorrow:     "TOMORROW"       / "غداً"         / "DEMAIN"
+completed:    "completed"      / "مكتملة"       / "terminées"
+organize:     "Organize your day" / "نظّم يومك" / "Organisez votre journée"
+tasko:        "Tasko"          / "Tasko"        / "Tasko"
+dark_mode:    "Dark Mode"      / "الوضع الداكن" / "Mode sombre"
+language:     "Language"       / "اللغة"        / "Langue"
+logout:       "Logout"         / "تسجيل الخروج" / "Déconnexion"
+save:         "Save"           / "حفظ"          / "Enregistrer"
+```
+
+---
+
+## Platform Setup
+
+### AndroidManifest.xml (complete)
+```xml
+<uses-permission android:name="android.permission.INTERNET"/>
+<uses-permission android:name="android.permission.CAMERA"/>
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+<uses-permission android:name="android.permission.VIBRATE"/>
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+
+<!-- Inside application tag -->
+<receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
+<receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+  <intent-filter>
+    <action android:name="android.intent.action.BOOT_COMPLETED"/>
+    <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+    <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+  </intent-filter>
+</receiver>
+```
+
+### iOS Info.plist
+```xml
+<key>CFBundleDisplayName</key>
+<string>Tasko</string>
+<key>NSCameraUsageDescription</key>
+<string>Used to set your profile picture</string>
+<key>NSPhotoLibraryUsageDescription</key>
+<string>Used to pick a profile picture</string>
 ```
 
 ---
@@ -374,53 +391,32 @@ dependencies:
   image_picker: ^1.0.7
   share_plus: ^7.2.1
   table_calendar: ^3.1.1
-```
+  flutter_local_notifications: ^17.0.0
+  timezone: ^0.9.4
 
----
+dev_dependencies:
+  flutter_launcher_icons: ^0.13.1
 
-## Platform Setup Required
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/app_icon.png"
 
-### Android (android/app/src/main/AndroidManifest.xml) — add inside `<manifest>`:
-```xml
-<uses-permission android:name="android.permission.INTERNET"/>
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-<uses-permission android:name="android.permission.CAMERA"/>
-```
-And inside `<application>`:
-```xml
-<activity android:name="com.linusu.flutter_web_auth.CallbackActivity" android:exported="true">
-  <intent-filter android:label="flutter_web_auth">
-    <action android:name="android.intent.action.VIEW" />
-    <category android:name="android.intent.category.DEFAULT" />
-    <category android:name="android.intent.category.BROWSABLE" />
-  </intent-filter>
-</activity>
-```
-
-### iOS (ios/Runner/Info.plist) — add:
-```xml
-<key>NSCameraUsageDescription</key>
-<string>Used to set your profile picture</string>
-<key>NSPhotoLibraryUsageDescription</key>
-<string>Used to pick a profile picture</string>
-<key>LSApplicationQueriesSchemes</key>
-<array>
-  <string>mailto</string>
-  <string>https</string>
-  <string>http</string>
-</array>
+flutter:
+  assets:
+    - assets/images/
 ```
 
 ---
 
 ## Conventions
 
-- All widgets are `StatelessWidget` unless local UI state is needed
-- Use `context.watch<Provider>()` for reactive UI, `context.read<Provider>()` for actions
-- All strings in `AppStrings` — no hardcoded text (except dev email which goes in EmailService)
-- All colors from `AppColors` — no hardcoded hex in widgets
-- All spacing from `AppSizes` — no hardcoded numbers
-- Format dates using `helpers.dart`
-- Validate all form inputs using `validators.dart`
-- Use `url_launcher` for ALL external links and mailto — never open browser manually
-- `launchUrl()` must always use `LaunchMode.externalApplication` for social links
+- All widgets `StatelessWidget` unless local UI state needed
+- `context.watch<P>()` for UI, `context.read<P>()` for actions
+- All colors from `AppColors` — zero hardcoded hex in widgets
+- All spacing from `AppSizes` — zero hardcoded numbers in widgets
+- `LocalStorageService` is a singleton — never call `init()` more than once
+- Tasks saved to SharedPreferences on EVERY change via optimistic pattern
+- `isLoggedIn` saved permanently — user never re-logs unless they tap Logout
+- Dark mode and language change take effect INSTANTLY without restart
+- `flutter analyze` passes with zero issues ✅

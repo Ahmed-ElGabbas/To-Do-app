@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:antigravity/core/constants/colors.dart';
-import 'package:antigravity/core/constants/sizes.dart';
-import 'package:antigravity/core/theme/text_styles.dart';
+import 'package:tasko/core/constants/colors.dart';
+import 'package:tasko/core/constants/sizes.dart';
+import 'package:tasko/core/theme/text_styles.dart';
 
 class InputField extends StatelessWidget {
   final String? label;
@@ -33,13 +33,14 @@ class InputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (label != null) ...[
           Text(
             label!,
-            style: AppTextStyles.labelLarge,
+            style: AppTextStyles.labelLarge.copyWith(color: theme.colorScheme.onSurface),
           ),
           const SizedBox(height: AppSizes.sm),
         ],
@@ -51,41 +52,41 @@ class InputField extends StatelessWidget {
           readOnly: readOnly,
           onTap: onTap,
           onChanged: onChanged,
-          style: AppTextStyles.bodyMedium,
+          style: AppTextStyles.bodyMedium.copyWith(color: theme.colorScheme.onSurface),
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.textSecondary,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
             ),
             filled: true,
-            fillColor: AppColors.background,
+            fillColor: theme.colorScheme.surface,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: AppSizes.md,
               vertical: AppSizes.md,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppSizes.inputRadius),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: BorderSide(color: theme.dividerColor),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppSizes.inputRadius),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: BorderSide(color: theme.dividerColor),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppSizes.inputRadius),
-              borderSide: const BorderSide(
-                color: AppColors.primary,
+              borderSide: BorderSide(
+                color: theme.primaryColor,
                 width: 2,
               ),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppSizes.inputRadius),
-              borderSide: const BorderSide(color: AppColors.error),
+              borderSide: const BorderSide(color: Colors.redAccent),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppSizes.inputRadius),
               borderSide: const BorderSide(
-                color: AppColors.error,
+                color: Colors.redAccent,
                 width: 2,
               ),
             ),

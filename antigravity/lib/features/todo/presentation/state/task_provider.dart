@@ -1,118 +1,119 @@
 import 'package:flutter/material.dart';
-import 'package:antigravity/features/todo/domain/entities/task.dart';
-import 'package:antigravity/features/todo/domain/usecases/add_task.dart';
-import 'package:antigravity/features/todo/domain/usecases/get_tasks.dart';
-import 'package:antigravity/features/todo/domain/usecases/delete_task.dart';
-import 'package:antigravity/features/todo/domain/usecases/update_task.dart';
-import 'package:antigravity/features/todo/presentation/state/task_state.dart';
-import 'package:antigravity/features/todo/data/datasources/local_data_source.dart';
-import 'package:antigravity/features/todo/data/repositories/task_repository_impl.dart';
-import 'package:antigravity/shared/services/local_storage_service.dart';
+import 'package:tasko/features/todo/domain/entities/task.dart';
+import 'package:tasko/features/todo/data/models/task_model.dart';
+import 'package:tasko/shared/services/local_storage_service.dart';
+import 'package:tasko/shared/services/notification_service.dart';
 
+/// Simple ChangeNotifier for task management.
+/// Talks directly to LocalStorageService — no use-case layer.
+/// Errors are NOT silently swallowed — they propagate to the caller.
 class TaskProvider extends ChangeNotifier {
-  late final GetTasks _getTasks;
-  late final AddTask _addTask;
-  late final DeleteTask _deleteTask;
-  late final UpdateTask _updateTask;
+  final _storage = LocalStorageService();
 
   List<Task> _tasks = [];
-  TaskState _state = TaskState.initial;
-  String _errorMessage = '';
 
-  TaskProvider() {
-    _initUseCases();
-  }
+  // ── Getters ───────────────────────────────────────────────────────────────
 
-  void _initUseCases() {
-    final storageService = LocalStorageService();
-    final localDataSource = LocalDataSource(storageService);
-    final repository = TaskRepositoryImpl(localDataSource);
-
-    _getTasks = GetTasks(repository);
-    _addTask = AddTask(repository);
-    _deleteTask = DeleteTask(repository);
-    _updateTask = UpdateTask(repository);
-  }
-
-  // Getters
   List<Task> get tasks => _tasks;
-  TaskState get state => _state;
-  String get errorMessage => _errorMessage;
+  List<Task> get allTasks => _tasks;
 
+  /// Tasks with date == "today" (exact string match)
   List<Task> get todayTasks =>
-      _tasks.where((t) => t.date.toLowerCase() == 'today').toList();
+      _tasks.where((t) => t.date == 'today').toList();
 
+  /// Tasks with date == "tomorrow" (exact string match)
   List<Task> get tomorrowTasks =>
-      _tasks.where((t) => t.date.toLowerCase() == 'tomorrow').toList();
+      _tasks.where((t) => t.date == 'tomorrow').toList();
 
-  /// Load all tasks from local storage
+  /// Number of completed tasks
+  int get completedCount => _tasks.where((t) => t.isDone).length;
+
+  // ── Load ──────────────────────────────────────────────────────────────────
+
+  /// Call once at startup (inside MultiProvider create).
   Future<void> loadTasks() async {
-    _state = TaskState.loading;
-    notifyListeners();
-
-    try {
-      _tasks = await _getTasks();
-      _state = TaskState.loaded;
-    } catch (e) {
-      _state = TaskState.error;
-      _errorMessage = e.toString();
-    }
+    final models = _storage.loadTasks(); // synchronous read
+    _tasks = List<Task>.from(models);
     notifyListeners();
   }
 
-  /// Add a new task
+  // ── Add ───────────────────────────────────────────────────────────────────
+
+  /// Adds a task.
+  /// Step 1: add to in-memory list and notify → UI updates INSTANTLY.
+  /// Step 2: persist to SharedPreferences.
+  /// Step 3: schedule notification (best-effort).
   Future<void> addTask(Task task) async {
+    // Instant UI update — happens synchronously before any await
+    _tasks.add(task);
+    notifyListeners();
+
+    // Persist
+    await _saveAll();
+
+    // Schedule notification (silent fail — never crashes the app)
     try {
-      await _addTask(task);
-      _tasks.add(task);
-      notifyListeners();
-    } catch (e) {
-      _errorMessage = e.toString();
-      notifyListeners();
-    }
+      final scheduledTime =
+          NotificationService.parseTaskDateTime(task.time, task.date);
+      if (scheduledTime != null) {
+        await NotificationService.scheduleTaskNotification(
+          id: task.notificationId,
+          title: task.title,
+          scheduledTime: scheduledTime,
+        );
+      }
+    } catch (_) {}
   }
 
-  /// Toggle task done status
+  // ── Toggle done ───────────────────────────────────────────────────────────
+
   Future<void> toggleDone(String id) async {
-    try {
-      final index = _tasks.indexWhere((t) => t.id == id);
-      if (index != -1) {
-        final task = _tasks[index];
-        final updatedTask = task.copyWith(isDone: !task.isDone);
-        await _updateTask(updatedTask);
-        _tasks[index] = updatedTask;
-        notifyListeners();
-      }
-    } catch (e) {
-      _errorMessage = e.toString();
-      notifyListeners();
-    }
+    final index = _tasks.indexWhere((t) => t.id == id);
+    if (index == -1) return;
+    _tasks[index] = _tasks[index].copyWith(isDone: !_tasks[index].isDone);
+    notifyListeners();
+    await _saveAll();
   }
 
-  /// Delete a task
+  // ── Delete ────────────────────────────────────────────────────────────────
+
   Future<void> deleteTask(String id) async {
+    final task = _tasks.firstWhere((t) => t.id == id,
+        orElse: () => throw StateError('Task $id not found'));
+    _tasks.removeWhere((t) => t.id == id);
+    notifyListeners();
+    await _saveAll();
     try {
-      await _deleteTask(id);
-      _tasks.removeWhere((t) => t.id == id);
-      notifyListeners();
-    } catch (e) {
-      _errorMessage = e.toString();
-      notifyListeners();
-    }
+      await NotificationService.cancelNotification(task.notificationId);
+    } catch (_) {}
   }
 
-  /// Update a task
+  // ── Update ────────────────────────────────────────────────────────────────
+
   Future<void> updateTask(Task task) async {
+    final index = _tasks.indexWhere((t) => t.id == task.id);
+    if (index == -1) return;
+    _tasks[index] = task;
+    notifyListeners();
+    await _saveAll();
+  }
+
+  // ── Clear all ─────────────────────────────────────────────────────────────
+
+  Future<void> clearAll() async {
+    _tasks.clear();
+    notifyListeners();
+    await _saveAll();
     try {
-      await _updateTask(task);
-      final index = _tasks.indexWhere((t) => t.id == task.id);
-      if (index != -1) {
-        _tasks[index] = task;
-        notifyListeners();
-      }
-    } catch (e) {
-      _errorMessage = e.toString();
-      notifyListeners();
-    }
+      await NotificationService.cancelAll();
+    } catch (_) {}
+  }
+
+  // ── Private helpers ───────────────────────────────────────────────────────
+
+  /// Convert all tasks to TaskModel and write to SharedPreferences.
+  Future<void> _saveAll() async {
+    final models = _tasks.map(TaskModel.fromEntity).toList();
+    await _storage.saveTasks(models);
   }
 }

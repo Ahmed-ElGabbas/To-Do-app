@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:antigravity/core/constants/colors.dart';
-import 'package:antigravity/core/constants/sizes.dart';
-import 'package:antigravity/core/constants/strings.dart';
-import 'package:antigravity/core/theme/text_styles.dart';
-import 'package:antigravity/features/auth/state/auth_provider.dart';
-import 'package:antigravity/features/auth/presentation/screens/signup_screen.dart';
-import 'package:antigravity/features/todo/presentation/widgets/main_scaffold.dart';
+import 'package:tasko/core/constants/colors.dart';
+import 'package:tasko/core/constants/sizes.dart';
+import 'package:tasko/core/constants/strings.dart';
+import 'package:tasko/core/theme/text_styles.dart';
+import 'package:tasko/core/localization/app_localizations.dart';
+import 'package:tasko/features/auth/state/auth_provider.dart';
+import 'package:tasko/features/auth/presentation/screens/signup_screen.dart';
+import 'package:tasko/features/todo/presentation/widgets/main_scaffold.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -31,16 +32,16 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  String? _validateEmail(String? value) {
-    if (value == null || value.trim().isEmpty) return AppStrings.fieldRequired;
+  String? _validateEmail(String? value, AppLocalizations l10n) {
+    if (value == null || value.trim().isEmpty) return l10n.get('field_required');
     final emailRegex = RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!emailRegex.hasMatch(value.trim())) return AppStrings.invalidEmail;
+    if (!emailRegex.hasMatch(value.trim())) return l10n.get('invalid_email');
     return null;
   }
 
-  String? _validatePassword(String? value) {
-    if (value == null || value.isEmpty) return AppStrings.fieldRequired;
-    if (value.length < 6) return AppStrings.passwordTooShort;
+  String? _validatePassword(String? value, AppLocalizations l10n) {
+    if (value == null || value.isEmpty) return l10n.get('field_required');
+    if (value.length < 6) return l10n.get('password_too_short');
     return null;
   }
 
@@ -51,6 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMessage = null;
     });
     final auth = context.read<AuthProvider>();
+    final l10n = AppLocalizations.of(context);
     final success = await auth.login(
       email: _emailController.text.trim(),
       password: _passwordController.text,
@@ -58,18 +60,22 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
     if (success) {
-      Navigator.of(context).pushReplacement(
+      Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const MainScaffold()),
+        (route) => false,
       );
     } else {
-      setState(() => _errorMessage = AppStrings.invalidCredentials);
+      setState(() => _errorMessage = l10n.get('invalid_credentials'));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: AppSizes.xl),
@@ -79,184 +85,116 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const SizedBox(height: AppSizes.xxl),
-
-                // Orange logo icon
                 Container(
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: AppColors.primary,
+                    color: theme.primaryColor,
                     borderRadius: BorderRadius.circular(AppSizes.radiusXl),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.3),
+                        color: theme.primaryColor.withValues(alpha: 0.3),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.check_rounded,
-                    size: 44,
-                    color: AppColors.white,
-                  ),
+                  child: const Icon(Icons.check_rounded, size: 44, color: Colors.white),
                 ),
                 const SizedBox(height: AppSizes.xl),
-
-                // Title
-                Text(
-                  AppStrings.welcomeBack,
-                  style: AppTextStyles.heading1,
-                ),
+                Text(l10n.get('welcome_back'), style: AppTextStyles.heading1.copyWith(color: theme.colorScheme.onSurface)),
                 const SizedBox(height: AppSizes.sm),
                 Text(
-                  AppStrings.signInSubtitle,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+                  l10n.get('sign_in_subtitle'),
+                  style: AppTextStyles.bodyMedium.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
                 ),
                 const SizedBox(height: AppSizes.xxl),
-
-                // Email field
-                _buildLabel(AppStrings.emailLabel),
+                _buildLabel(l10n.get('email'), theme),
                 const SizedBox(height: AppSizes.sm),
                 TextFormField(
                   controller: _emailController,
-                  validator: _validateEmail,
+                  validator: (v) => _validateEmail(v, l10n),
                   keyboardType: TextInputType.emailAddress,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: AppColors.textPrimary,
-                  ),
-                  decoration: _inputDecoration(
-                    hint: AppStrings.emailHint,
-                    prefixIcon: Icons.email_outlined,
-                  ),
+                  style: GoogleFonts.poppins(fontSize: 14, color: theme.colorScheme.onSurface),
+                  decoration: _inputDecoration(theme: theme, hint: l10n.get('email_hint'), prefixIcon: Icons.email_outlined),
                 ),
                 const SizedBox(height: AppSizes.md),
-
-                // Password field
-                _buildLabel(AppStrings.passwordLabel),
+                _buildLabel(l10n.get('password'), theme),
                 const SizedBox(height: AppSizes.sm),
                 TextFormField(
                   controller: _passwordController,
-                  validator: _validatePassword,
+                  validator: (v) => _validatePassword(v, l10n),
                   obscureText: _obscurePassword,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: AppColors.textPrimary,
-                  ),
+                  style: GoogleFonts.poppins(fontSize: 14, color: theme.colorScheme.onSurface),
                   decoration: _inputDecoration(
-                    hint: AppStrings.passwordHint,
+                    theme: theme,
+                    hint: l10n.get('password_hint'),
                     prefixIcon: Icons.lock_outline_rounded,
                     suffix: IconButton(
                       icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                        color: AppColors.primary,
+                        _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                        color: theme.primaryColor,
                         size: AppSizes.iconMd,
                       ),
-                      onPressed: () =>
-                          setState(() => _obscurePassword = !_obscurePassword),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                 ),
                 const SizedBox(height: AppSizes.sm),
-
-                // Forgot password
                 Align(
                   alignment: Alignment.centerRight,
                   child: GestureDetector(
                     onTap: () {},
                     child: Text(
-                      AppStrings.forgotPassword,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      l10n.get('forgot_password'),
+                      style: AppTextStyles.bodySmall.copyWith(color: theme.primaryColor, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
                 const SizedBox(height: AppSizes.xl),
-
-                // Error message
                 if (_errorMessage != null) ...[
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(AppSizes.md),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.1),
+                      color: Colors.redAccent.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(AppSizes.radiusMd),
                     ),
                     child: Text(
                       _errorMessage!,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.error,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: AppTextStyles.bodySmall.copyWith(color: Colors.redAccent, fontWeight: FontWeight.w500),
                       textAlign: TextAlign.center,
                     ),
                   ),
                   const SizedBox(height: AppSizes.md),
                 ],
-
-                // Sign In button
                 SizedBox(
                   width: double.infinity,
                   height: AppSizes.buttonHeight,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _signIn,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: AppColors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppSizes.buttonRadius),
-                      ),
+                      backgroundColor: theme.primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.buttonRadius)),
                       elevation: 0,
                     ),
                     child: _isLoading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: AppColors.white,
-                            ),
-                          )
-                        : Text(
-                            AppStrings.signIn,
-                            style: AppTextStyles.button,
-                          ),
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                        : Text(l10n.get('sign_in'), style: AppTextStyles.button),
                   ),
                 ),
                 const SizedBox(height: AppSizes.xl),
-
-                // Sign up link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      AppStrings.noAccount,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
+                    Text(l10n.get('no_account'), style: AppTextStyles.bodySmall.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
+                    const SizedBox(width: 4),
                     GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const SignupScreen(),
-                          ),
-                        );
-                      },
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SignupScreen())),
                       child: Text(
-                        AppStrings.signUp,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        l10n.get('sign_up'),
+                        style: AppTextStyles.bodySmall.copyWith(color: theme.primaryColor, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ],
@@ -270,52 +208,24 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildLabel(String label) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(label, style: AppTextStyles.labelLarge),
-    );
+  Widget _buildLabel(String label, ThemeData theme) {
+    return Align(alignment: Alignment.centerLeft, child: Text(label, style: AppTextStyles.labelLarge.copyWith(color: theme.colorScheme.onSurface)));
   }
 
-  InputDecoration _inputDecoration({
-    required String hint,
-    required IconData prefixIcon,
-    Widget? suffix,
-  }) {
+  InputDecoration _inputDecoration({required ThemeData theme, required String hint, required IconData prefixIcon, Widget? suffix}) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: GoogleFonts.poppins(
-        color: AppColors.textSecondary,
-        fontSize: 14,
-      ),
+      hintStyle: GoogleFonts.poppins(color: theme.colorScheme.onSurface.withValues(alpha: 0.4), fontSize: 14),
       filled: true,
-      fillColor: AppColors.surface,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: AppSizes.md,
-        vertical: AppSizes.md,
-      ),
-      prefixIcon: Icon(prefixIcon, color: AppColors.primary, size: AppSizes.iconMd),
+      fillColor: theme.colorScheme.surface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.md),
+      prefixIcon: Icon(prefixIcon, color: theme.primaryColor, size: AppSizes.iconMd),
       suffixIcon: suffix,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-        borderSide: const BorderSide(color: AppColors.border),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-        borderSide: const BorderSide(color: AppColors.border),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-        borderSide: const BorderSide(color: AppColors.primary, width: 2),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-        borderSide: const BorderSide(color: AppColors.error),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-        borderSide: const BorderSide(color: AppColors.error, width: 2),
-      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.dividerColor)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.dividerColor)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.primaryColor, width: 2)),
+      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: const BorderSide(color: Colors.redAccent)),
+      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: const BorderSide(color: Colors.redAccent, width: 2)),
     );
   }
 }

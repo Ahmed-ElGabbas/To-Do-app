@@ -2,7 +2,7 @@ class AppStrings {
   AppStrings._();
 
   // App
-  static const String appName = 'Todo App';
+  static const String appName = 'Tasko';
   static const String appTagline = 'Organize your day';
 
   // Navigation
@@ -20,7 +20,7 @@ class AppStrings {
   static const String allTasksDone = 'All tasks completed!';
 
   // Add task screen
-  static const String addTask = 'Add Task';
+  static const String addTask = 'Add New Task';
   static const String editTask = 'Edit Task';
   static const String taskName = 'Task Name';
   static const String taskNameHint = 'Enter task name';
@@ -90,7 +90,7 @@ class AppStrings {
   static const String countryHint = 'Enter your country';
   static const String bio = 'Bio';
   static const String bioHint = 'Tell us about yourself (optional)';
-  static const String accountCreated = 'Account created! Please login.';
+  static const String accountCreated = 'Account created successfully!';
   static const String invalidCredentials = 'Invalid email or password.';
   static const String profilePicture = 'Profile Picture';
   static const String tapToChange = 'Tap to change';
@@ -104,7 +104,8 @@ class AppStrings {
   static const String followUs = 'Follow Us';
   static const String inviteFriends = 'Invite Friends';
   static const String inviteMessage =
-      'Hey! Check out this amazing Todo app — stay organized every day! 🎯';
+      'Hey! Try Tasko - Organize your day! Download it here: '
+      'https://drive.google.com/file/d/1qkCqcoaoDk83PzA07ME6YhnE2xlqq64c/view?usp=sharing';
 
   // Profile
   static const String editProfile = 'Edit Profile';
@@ -134,8 +135,8 @@ class AppStrings {
   static const String filterAll = 'All';
   static const String filterDone = 'Done';
   static const String filterPending = 'Pending';
-  static const String noTasksFound = 'No tasks found';
-  static const String addFirstTask = 'Add your first task!';
+  static const String noTasksFound = 'No tasks yet!';
+  static const String addFirstTask = 'Tap + to add your first task';
 
   // Calendar screen
   static const String noTasksForDay = 'No tasks for this day';
@@ -144,4 +145,9 @@ class AppStrings {
   static const String facebook = 'Facebook';
   static const String instagram = 'Instagram';
   static const String twitter = 'Twitter';
+
+  // Notifications dialog
+  static const String upcomingTasks = 'Upcoming Tasks';
+  static const String noUpcomingTasks = 'No upcoming tasks 🎉';
+  static const String completedSuffix = 'tasks completed ✓';
 }

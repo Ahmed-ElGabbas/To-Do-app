@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tasko/shared/services/local_storage_service.dart';
 
 class AuthProvider extends ChangeNotifier {
+  final _storage = LocalStorageService();
+
   // Keys
   static const _kIsLoggedIn = 'auth_is_logged_in';
   static const _kName = 'auth_name';
@@ -32,17 +34,18 @@ class AuthProvider extends ChangeNotifier {
   String get bio => _bio;
   String get profileImagePath => _profileImagePath;
 
-  /// Load user from SharedPreferences
+  /// Load user from LocalStorageService (SharedPreferences)
+  /// This must be called and awaited if you want immediate values,
+  /// but usually called in MultiProvider create.
   Future<void> loadUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    _isLoggedIn = prefs.getBool(_kIsLoggedIn) ?? false;
-    _name = prefs.getString(_kName) ?? '';
-    _email = prefs.getString(_kEmail) ?? '';
-    _password = prefs.getString(_kPassword) ?? '';
-    _phone = prefs.getString(_kPhone) ?? '';
-    _country = prefs.getString(_kCountry) ?? '';
-    _bio = prefs.getString(_kBio) ?? '';
-    _profileImagePath = prefs.getString(_kProfileImagePath) ?? '';
+    _isLoggedIn = _storage.readBool(_kIsLoggedIn) ?? false;
+    _name = _storage.read(_kName) ?? '';
+    _email = _storage.read(_kEmail) ?? '';
+    _password = _storage.read(_kPassword) ?? '';
+    _phone = _storage.read(_kPhone) ?? '';
+    _country = _storage.read(_kCountry) ?? '';
+    _bio = _storage.read(_kBio) ?? '';
+    _profileImagePath = _storage.read(_kProfileImagePath) ?? '';
     notifyListeners();
   }
 
@@ -63,7 +66,7 @@ class AuthProvider extends ChangeNotifier {
     _country = country;
     _bio = bio;
     _profileImagePath = profileImagePath;
-    _isLoggedIn = false;
+    _isLoggedIn = true;
 
     await _save();
     notifyListeners();
@@ -75,6 +78,7 @@ class AuthProvider extends ChangeNotifier {
     required String email,
     required String password,
   }) async {
+    // Basic verification against stored credentials
     if (_email == email && _password == password) {
       _isLoggedIn = true;
       await _save();
@@ -87,8 +91,7 @@ class AuthProvider extends ChangeNotifier {
   /// Logout current user
   Future<void> logout() async {
     _isLoggedIn = false;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kIsLoggedIn, false);
+    await _storage.writeBool(_kIsLoggedIn, false);
     notifyListeners();
   }
 
@@ -109,7 +112,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Change email (requires current password verification)
+  /// Change email
   Future<bool> changeEmail({
     required String currentPassword,
     required String newEmail,
@@ -134,14 +137,13 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _save() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kIsLoggedIn, _isLoggedIn);
-    await prefs.setString(_kName, _name);
-    await prefs.setString(_kEmail, _email);
-    await prefs.setString(_kPassword, _password);
-    await prefs.setString(_kPhone, _phone);
-    await prefs.setString(_kCountry, _country);
-    await prefs.setString(_kBio, _bio);
-    await prefs.setString(_kProfileImagePath, _profileImagePath);
+    await _storage.writeBool(_kIsLoggedIn, _isLoggedIn);
+    await _storage.write(_kName, _name);
+    await _storage.write(_kEmail, _email);
+    await _storage.write(_kPassword, _password);
+    await _storage.write(_kPhone, _phone);
+    await _storage.write(_kCountry, _country);
+    await _storage.write(_kBio, _bio);
+    await _storage.write(_kProfileImagePath, _profileImagePath);
   }
 }

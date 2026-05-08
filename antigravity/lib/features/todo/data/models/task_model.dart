@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'package:antigravity/features/todo/domain/entities/task.dart';
+import 'package:tasko/features/todo/domain/entities/task.dart';
 
 class TaskModel extends Task {
-  const TaskModel({
+  TaskModel({
     required super.id,
     required super.title,
     required super.time,
@@ -10,6 +10,8 @@ class TaskModel extends Task {
     super.isDone,
     super.priority,
     super.notes,
+    super.createdAt,
+    super.notificationId,
   });
 
   factory TaskModel.fromJson(Map<String, dynamic> json) {
@@ -21,6 +23,10 @@ class TaskModel extends Task {
       isDone: json['isDone'] as bool? ?? false,
       priority: json['priority'] as String? ?? 'medium',
       notes: json['notes'] as String?,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'] as String)
+          : null,
+      notificationId: json['notificationId'] as int?,
     );
   }
 
@@ -33,6 +39,8 @@ class TaskModel extends Task {
       'isDone': isDone,
       'priority': priority,
       'notes': notes,
+      'createdAt': createdAt.toIso8601String(),
+      'notificationId': notificationId,
     };
   }
 
@@ -45,6 +53,8 @@ class TaskModel extends Task {
       isDone: task.isDone,
       priority: task.priority,
       notes: task.notes,
+      createdAt: task.createdAt,
+      notificationId: task.notificationId,
     );
   }
 
@@ -53,7 +63,8 @@ class TaskModel extends Task {
   }
 
   static List<TaskModel> decode(String tasksString) {
-    final List<dynamic> jsonList = json.decode(tasksString) as List<dynamic>;
+    final List<dynamic> jsonList =
+        json.decode(tasksString) as List<dynamic>;
     return jsonList
         .map((item) => TaskModel.fromJson(item as Map<String, dynamic>))
         .toList();

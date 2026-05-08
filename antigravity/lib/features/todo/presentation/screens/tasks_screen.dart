@@ -1,37 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:antigravity/core/constants/colors.dart';
-import 'package:antigravity/core/constants/sizes.dart';
-import 'package:antigravity/core/constants/strings.dart';
-import 'package:antigravity/core/theme/text_styles.dart';
-import 'package:antigravity/features/todo/domain/entities/task.dart';
-import 'package:antigravity/features/todo/presentation/state/task_provider.dart';
-import 'package:antigravity/features/todo/presentation/state/task_state.dart';
-import 'package:antigravity/features/todo/presentation/widgets/task_card.dart';
-import 'package:antigravity/features/todo/presentation/screens/add_task_screen.dart';
-import 'package:antigravity/features/todo/presentation/screens/task_details_screen.dart';
-import 'package:antigravity/shared/widgets/loading_widget.dart';
+import 'package:tasko/core/constants/colors.dart';
+import 'package:tasko/core/constants/strings.dart';
+import 'package:tasko/core/constants/sizes.dart';
+import 'package:tasko/core/theme/text_styles.dart';
+import 'package:tasko/core/localization/app_localizations.dart';
+import 'package:tasko/features/todo/presentation/state/task_provider.dart';
+import 'package:tasko/features/todo/presentation/state/settings_provider.dart';
+import 'package:tasko/features/todo/presentation/widgets/task_card.dart';
+import 'package:tasko/features/todo/presentation/screens/add_task_screen.dart';
+import 'package:tasko/features/todo/presentation/screens/task_details_screen.dart';
+import 'package:tasko/features/todo/domain/entities/task.dart';
 
 class TasksScreen extends StatefulWidget {
-  const TasksScreen({super.key});
+  final GlobalKey<ScaffoldState>? scaffoldKey;
+  const TasksScreen({super.key, this.scaffoldKey});
 
   @override
   State<TasksScreen> createState() => _TasksScreenState();
 }
 
 class _TasksScreenState extends State<TasksScreen> {
-  final _searchController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
+  String _activeFilter = 'all';
   String _searchQuery = '';
-  String _activeFilter = AppStrings.filterAll;
 
-  final List<String> _filters = [
-    AppStrings.filterAll,
-    AppStrings.today,
-    AppStrings.tomorrow,
-    AppStrings.filterDone,
-    AppStrings.filterPending,
-  ];
+  final List<String> _filters = ['all', 'today', 'tomorrow', 'done', 'pending'];
 
   @override
   void dispose() {
@@ -39,72 +34,180 @@ class _TasksScreenState extends State<TasksScreen> {
     super.dispose();
   }
 
-  List<Task> _applyFilters(List<Task> tasks) {
-    List<Task> filtered = List.from(tasks);
-    if (_activeFilter == AppStrings.today) {
-      filtered = filtered.where((t) => t.date.toLowerCase() == 'today').toList();
-    } else if (_activeFilter == AppStrings.tomorrow) {
-      filtered = filtered.where((t) => t.date.toLowerCase() == 'tomorrow').toList();
-    } else if (_activeFilter == AppStrings.filterDone) {
-      filtered = filtered.where((t) => t.isDone).toList();
-    } else if (_activeFilter == AppStrings.filterPending) {
-      filtered = filtered.where((t) => !t.isDone).toList();
-    }
+  List<Task> _applyFilter(List<Task> tasks) {
+    List<Task> filtered = tasks;
+
     if (_searchQuery.isNotEmpty) {
       filtered = filtered
           .where((t) => t.title.toLowerCase().contains(_searchQuery.toLowerCase()))
           .toList();
     }
+
+    switch (_activeFilter) {
+      case 'today':
+        filtered = filtered.where((t) => t.date.toLowerCase() == 'today').toList();
+        break;
+      case 'tomorrow':
+        filtered = filtered.where((t) => t.date.toLowerCase() == 'tomorrow').toList();
+        break;
+      case 'done':
+        filtered = filtered.where((t) => t.isDone).toList();
+        break;
+      case 'pending':
+        filtered = filtered.where((t) => !t.isDone).toList();
+        break;
+    }
+
     return filtered;
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
-        title: Text(AppStrings.allMyTasks, style: AppTextStyles.heading3),
-        centerTitle: false,
-        automaticallyImplyLeading: false,
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        leading: IconButton(
+          icon: Icon(Icons.menu_rounded, color: theme.colorScheme.onSurface),
+          onPressed: () => widget.scaffoldKey?.currentState?.openDrawer(),
+        ),
+        title: Text(l10n.get('tasks'), style: AppTextStyles.heading3.copyWith(color: theme.colorScheme.onSurface)),
+        centerTitle: true,
       ),
       body: Consumer<TaskProvider>(
-        builder: (context, provider, _) {
-          if (provider.state == TaskState.loading) return const LoadingWidget();
-          final filtered = _applyFilters(provider.tasks);
+        builder: (context, provider, child) {
+          final allTasks = provider.tasks;
+          final filteredTasks = _applyFilter(allTasks);
+          final completedCount = provider.completedCount;
+
           return Column(
             children: [
-              _buildSearchBar(),
-              _buildFilterChips(),
-              const SizedBox(height: AppSizes.sm),
-              Expanded(
-                child: filtered.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSizes.md),
-                        itemCount: filtered.length,
+              Container(
+                color: theme.colorScheme.surface,
+                padding: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (allTasks.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.xs),
+                        decoration: BoxDecoration(
+                          color: theme.primaryColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(AppSizes.radiusFull),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_circle_rounded, color: theme.primaryColor, size: 16),
+                            const SizedBox(width: AppSizes.xs),
+                            Text(
+                              '$completedCount ${l10n.get('completed')}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: theme.primaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSizes.sm),
+                    ],
+
+                    TextFormField(
+                      controller: _searchController,
+                      onChanged: (v) => setState(() => _searchQuery = v),
+                      style: GoogleFonts.poppins(fontSize: 14, color: theme.colorScheme.onSurface),
+                      decoration: InputDecoration(
+                        hintText: l10n.get('search'),
+                        hintStyle: GoogleFonts.poppins(color: theme.colorScheme.onSurface.withValues(alpha: 0.5), fontSize: 14),
+                        filled: true,
+                        fillColor: theme.brightness == Brightness.light ? Colors.white : theme.colorScheme.surface,
+                        prefixIcon: Icon(Icons.search_rounded, color: theme.primaryColor),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: Icon(Icons.close_rounded, color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                              )
+                            : null,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.md),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.dividerColor)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.dividerColor)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.primaryColor, width: 2)),
+                      ),
+                    ),
+                    const SizedBox(height: AppSizes.sm),
+
+                    SizedBox(
+                      height: 40,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _filters.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: AppSizes.sm),
                         itemBuilder: (context, index) {
-                          final task = filtered[index];
+                          final filter = _filters[index];
+                          final isActive = _activeFilter == filter;
+                          return GestureDetector(
+                            onTap: () => setState(() => _activeFilter = filter),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.xs),
+                              decoration: BoxDecoration(
+                                color: isActive ? theme.primaryColor : Colors.transparent,
+                                borderRadius: BorderRadius.circular(AppSizes.radiusFull),
+                                border: Border.all(color: isActive ? theme.primaryColor : theme.dividerColor),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  l10n.get(filter),
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                                    color: isActive ? Colors.white : theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              Divider(color: theme.dividerColor, height: 1),
+
+              Expanded(
+                child: filteredTasks.isEmpty
+                    ? _buildEmptyState(context, l10n)
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(AppSizes.md),
+                        itemCount: filteredTasks.length,
+                        itemBuilder: (context, index) {
+                          final task = filteredTasks[index];
                           return Dismissible(
-                            key: Key(task.id),
+                            key: ValueKey(task.id),
                             direction: DismissDirection.endToStart,
+                            onDismissed: (_) => provider.deleteTask(task.id),
                             background: Container(
                               alignment: Alignment.centerRight,
                               padding: const EdgeInsets.only(right: AppSizes.lg),
-                              margin: const EdgeInsets.only(bottom: AppSizes.sm),
-                              decoration: BoxDecoration(
-                                color: AppColors.error,
-                                borderRadius: BorderRadius.circular(AppSizes.cardRadius),
-                              ),
-                              child: const Icon(Icons.delete_rounded, color: AppColors.white, size: AppSizes.iconLg),
+                              color: Colors.redAccent,
+                              child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
                             ),
-                            onDismissed: (_) => context.read<TaskProvider>().deleteTask(task.id),
                             child: TaskCard(
                               task: task,
-                              onToggle: () => context.read<TaskProvider>().toggleDone(task.id),
-                              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                                builder: (_) => TaskDetailsScreen(task: task),
-                              )),
+                              onToggle: () => provider.toggleDone(task.id),
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => TaskDetailsScreen(task: task)),
+                              ),
                             ),
                           );
                         },
@@ -116,88 +219,21 @@ class _TasksScreenState extends State<TasksScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddTaskScreen())),
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: AppColors.white),
+        backgroundColor: theme.primaryColor,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      color: AppColors.background,
-      padding: const EdgeInsets.fromLTRB(AppSizes.md, 0, AppSizes.md, AppSizes.md),
-      child: TextField(
-        controller: _searchController,
-        onChanged: (val) => setState(() => _searchQuery = val),
-        style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textPrimary),
-        decoration: InputDecoration(
-          hintText: AppStrings.searchHint,
-          hintStyle: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 14),
-          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
-                  onPressed: () { _searchController.clear(); setState(() => _searchQuery = ''); },
-                )
-              : null,
-          filled: true,
-          fillColor: AppColors.surface,
-          contentPadding: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.sm),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: const BorderSide(color: AppColors.border)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: const BorderSide(color: AppColors.border)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: const BorderSide(color: AppColors.primary, width: 2)),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterChips() {
-    return Container(
-      color: AppColors.background,
-      height: 50,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.sm),
-        itemCount: _filters.length,
-        separatorBuilder: (_, _) => const SizedBox(width: AppSizes.sm),
-        itemBuilder: (context, index) {
-          final filter = _filters[index];
-          final isActive = _activeFilter == filter;
-          return GestureDetector(
-            onTap: () => setState(() => _activeFilter = filter),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.xs),
-              decoration: BoxDecoration(
-                color: isActive ? AppColors.primary : AppColors.surface,
-                borderRadius: BorderRadius.circular(AppSizes.radiusFull),
-                border: Border.all(color: isActive ? AppColors.primary : AppColors.border),
-              ),
-              child: Text(
-                filter,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                  color: isActive ? AppColors.white : AppColors.textSecondary,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.task_alt_rounded, size: 72, color: AppColors.primary.withValues(alpha: 0.25)),
+          Icon(Icons.task_alt_rounded, size: 72, color: theme.colorScheme.onSurface.withValues(alpha: 0.1)),
           const SizedBox(height: AppSizes.md),
-          Text(AppStrings.noTasksFound, style: AppTextStyles.heading3.copyWith(color: AppColors.textSecondary)),
-          const SizedBox(height: AppSizes.sm),
-          Text(AppStrings.addFirstTask, style: AppTextStyles.bodySmall),
+          Text(l10n.get('no_tasks'), style: AppTextStyles.heading3.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
         ],
       ),
     );

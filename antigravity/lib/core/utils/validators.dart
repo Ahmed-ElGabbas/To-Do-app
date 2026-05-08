@@ -1,4 +1,4 @@
-import 'package:antigravity/core/constants/strings.dart';
+import 'package:tasko/core/constants/strings.dart';
 
 class Validators {
   Validators._();

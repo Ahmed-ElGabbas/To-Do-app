@@ -2,12 +2,14 @@ class Task {
   final String id;
   final String title;
   final String time;
-  final String date;
+  final String date; // "today", "tomorrow", or "YYYY-MM-DD"
   final bool isDone;
-  final String priority;
+  final String priority; // "high", "medium", "low"
   final String? notes;
+  final DateTime createdAt;
+  final int notificationId; // used to cancel notification on delete
 
-  const Task({
+  Task({
     required this.id,
     required this.title,
     required this.time,
@@ -15,7 +17,10 @@ class Task {
     this.isDone = false,
     this.priority = 'medium',
     this.notes,
-  });
+    DateTime? createdAt,
+    int? notificationId,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        notificationId = notificationId ?? id.hashCode.abs() % 2147483647;
 
   Task copyWith({
     String? id,
@@ -25,6 +30,8 @@ class Task {
     bool? isDone,
     String? priority,
     String? notes,
+    DateTime? createdAt,
+    int? notificationId,
   }) {
     return Task(
       id: id ?? this.id,
@@ -34,6 +41,8 @@ class Task {
       isDone: isDone ?? this.isDone,
       priority: priority ?? this.priority,
       notes: notes ?? this.notes,
+      createdAt: createdAt ?? this.createdAt,
+      notificationId: notificationId ?? this.notificationId,
     );
   }
 

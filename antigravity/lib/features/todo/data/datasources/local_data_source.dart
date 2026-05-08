@@ -1,5 +1,5 @@
-import 'package:antigravity/features/todo/data/models/task_model.dart';
-import 'package:antigravity/shared/services/local_storage_service.dart';
+import 'package:tasko/features/todo/data/models/task_model.dart';
+import 'package:tasko/shared/services/local_storage_service.dart';
 
 class LocalDataSource {
   static const String _tasksKey = 'tasks';

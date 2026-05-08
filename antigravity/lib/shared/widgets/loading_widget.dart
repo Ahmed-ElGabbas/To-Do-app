@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:antigravity/core/constants/colors.dart';
-import 'package:antigravity/core/constants/sizes.dart';
+import 'package:tasko/core/constants/colors.dart';
+import 'package:tasko/core/constants/sizes.dart';
 
 class LoadingWidget extends StatelessWidget {
   final double size;

@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:antigravity/core/constants/colors.dart';
-import 'package:antigravity/core/constants/sizes.dart';
-import 'package:antigravity/core/constants/strings.dart';
-import 'package:antigravity/core/theme/text_styles.dart';
-import 'package:antigravity/features/auth/state/auth_provider.dart';
+import 'package:tasko/core/constants/colors.dart';
+import 'package:tasko/core/constants/sizes.dart';
+import 'package:tasko/core/constants/strings.dart';
+import 'package:tasko/core/theme/text_styles.dart';
+import 'package:tasko/core/localization/app_localizations.dart';
+import 'package:tasko/features/auth/state/auth_provider.dart';
+import 'package:tasko/features/todo/presentation/widgets/main_scaffold.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -42,30 +44,25 @@ class _SignupScreenState extends State<SignupScreen> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-    );
-    if (picked != null) {
-      setState(() => _profileImagePath = picked.path);
-    }
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (picked != null) setState(() => _profileImagePath = picked.path);
   }
 
-  String? _validateRequired(String? value) {
-    if (value == null || value.trim().isEmpty) return AppStrings.fieldRequired;
+  String? _validateRequired(String? value, AppLocalizations l10n) {
+    if (value == null || value.trim().isEmpty) return l10n.get('field_required');
     return null;
   }
 
-  String? _validateEmail(String? value) {
-    if (value == null || value.trim().isEmpty) return AppStrings.fieldRequired;
+  String? _validateEmail(String? value, AppLocalizations l10n) {
+    if (value == null || value.trim().isEmpty) return l10n.get('field_required');
     final emailRegex = RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!emailRegex.hasMatch(value.trim())) return AppStrings.invalidEmail;
+    if (!emailRegex.hasMatch(value.trim())) return l10n.get('invalid_email');
     return null;
   }
 
-  String? _validatePassword(String? value) {
-    if (value == null || value.isEmpty) return AppStrings.fieldRequired;
-    if (value.length < 6) return AppStrings.passwordTooShort;
+  String? _validatePassword(String? value, AppLocalizations l10n) {
+    if (value == null || value.isEmpty) return l10n.get('field_required');
+    if (value.length < 6) return l10n.get('password_too_short');
     return null;
   }
 
@@ -74,6 +71,7 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => _isLoading = true);
 
     final auth = context.read<AuthProvider>();
+    final l10n = AppLocalizations.of(context);
     await auth.signUp(
       name: _nameController.text.trim(),
       email: _emailController.text.trim(),
@@ -88,23 +86,26 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => _isLoading = false);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(AppStrings.accountCreated),
-        backgroundColor: AppColors.success,
-      ),
+      const SnackBar(content: Text('Account created successfully!'), backgroundColor: Colors.green),
     );
-    Navigator.of(context).pop();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const MainScaffold()),
+      (_) => false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_rounded, color: theme.colorScheme.onSurface),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -117,8 +118,6 @@ class _SignupScreenState extends State<SignupScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const SizedBox(height: AppSizes.md),
-
-                // Profile picture picker
                 GestureDetector(
                   onTap: _pickImage,
                   child: Stack(
@@ -129,171 +128,121 @@ class _SignupScreenState extends State<SignupScreen> {
                         height: 110,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.primary,
-                            width: 3,
-                          ),
-                          color: AppColors.surface,
+                          border: Border.all(color: theme.primaryColor, width: 3),
+                          color: theme.colorScheme.surface,
                         ),
                         child: ClipOval(
                           child: _profileImagePath != null
-                              ? Image.file(
-                                  File(_profileImagePath!),
-                                  fit: BoxFit.cover,
-                                )
-                              : const Icon(
-                                  Icons.person_rounded,
-                                  size: 60,
-                                  color: AppColors.textSecondary,
-                                ),
+                              ? Image.file(File(_profileImagePath!), fit: BoxFit.cover)
+                              : Icon(Icons.person_rounded, size: 60, color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
                         ),
                       ),
                       Container(
                         width: 32,
                         height: 32,
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.camera_alt_rounded,
-                          size: 18,
-                          color: AppColors.white,
-                        ),
+                        decoration: BoxDecoration(color: theme.primaryColor, shape: BoxShape.circle),
+                        child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: AppSizes.sm),
-                Text(
-                  AppStrings.tapToChange,
-                  style: AppTextStyles.caption,
-                ),
+                Text(l10n.get('tap_to_change') ?? 'Tap to change', style: AppTextStyles.caption.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
                 const SizedBox(height: AppSizes.xl),
-
-                // Title
-                Text(AppStrings.createAccount, style: AppTextStyles.heading2),
+                Text(l10n.get('sign_up'), style: AppTextStyles.heading2.copyWith(color: theme.colorScheme.onSurface)),
                 const SizedBox(height: AppSizes.xxl),
-
-                // Full Name
                 _buildField(
-                  label: AppStrings.fullName,
-                  hint: AppStrings.fullNameHint,
+                  theme: theme,
+                  l10n: l10n,
+                  label: l10n.get('full_name'),
+                  hint: l10n.get('full_name'),
                   controller: _nameController,
                   icon: Icons.person_outline_rounded,
-                  validator: _validateRequired,
+                  validator: (v) => _validateRequired(v, l10n),
                 ),
                 const SizedBox(height: AppSizes.md),
-
-                // Email
                 _buildField(
-                  label: AppStrings.emailLabel,
-                  hint: AppStrings.emailHint,
+                  theme: theme,
+                  l10n: l10n,
+                  label: l10n.get('email'),
+                  hint: l10n.get('email_hint'),
                   controller: _emailController,
                   icon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
-                  validator: _validateEmail,
+                  validator: (v) => _validateEmail(v, l10n),
                 ),
                 const SizedBox(height: AppSizes.md),
-
-                // Password
                 _buildField(
-                  label: AppStrings.passwordLabel,
-                  hint: AppStrings.passwordHint,
+                  theme: theme,
+                  l10n: l10n,
+                  label: l10n.get('password'),
+                  hint: l10n.get('password_hint'),
                   controller: _passwordController,
                   icon: Icons.lock_outline_rounded,
                   obscureText: _obscurePassword,
-                  validator: _validatePassword,
+                  validator: (v) => _validatePassword(v, l10n),
                   suffix: IconButton(
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      color: AppColors.primary,
-                      size: AppSizes.iconMd,
-                    ),
-                    onPressed: () =>
-                        setState(() => _obscurePassword = !_obscurePassword),
+                    icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: theme.primaryColor, size: AppSizes.iconMd),
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
                 const SizedBox(height: AppSizes.md),
-
-                // Phone
                 _buildField(
-                  label: AppStrings.phoneNumber,
-                  hint: AppStrings.phoneHint,
+                  theme: theme,
+                  l10n: l10n,
+                  label: l10n.get('phone'),
+                  hint: l10n.get('phone'),
                   controller: _phoneController,
                   icon: Icons.phone_outlined,
                   keyboardType: TextInputType.phone,
                 ),
                 const SizedBox(height: AppSizes.md),
-
-                // Country
                 _buildField(
-                  label: AppStrings.country,
-                  hint: AppStrings.countryHint,
+                  theme: theme,
+                  l10n: l10n,
+                  label: l10n.get('country'),
+                  hint: l10n.get('country'),
                   controller: _countryController,
                   icon: Icons.public_rounded,
                 ),
                 const SizedBox(height: AppSizes.md),
-
-                // Bio
                 _buildField(
-                  label: AppStrings.bio,
-                  hint: AppStrings.bioHint,
+                  theme: theme,
+                  l10n: l10n,
+                  label: l10n.get('bio'),
+                  hint: l10n.get('bio'),
                   controller: _bioController,
                   icon: Icons.info_outline_rounded,
                   maxLines: 3,
                 ),
                 const SizedBox(height: AppSizes.xxl),
-
-                // Create Account button
                 SizedBox(
                   width: double.infinity,
                   height: AppSizes.buttonHeight,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _createAccount,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: AppColors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppSizes.buttonRadius),
-                      ),
+                      backgroundColor: theme.primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.buttonRadius)),
                       elevation: 0,
                     ),
                     child: _isLoading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: AppColors.white,
-                            ),
-                          )
-                        : Text(AppStrings.createAccount, style: AppTextStyles.button),
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                        : Text(l10n.get('sign_up'), style: AppTextStyles.button),
                   ),
                 ),
                 const SizedBox(height: AppSizes.xl),
-
-                // Already have account
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      AppStrings.alreadyHaveAccount,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
+                    Text(l10n.get('have_account'), style: AppTextStyles.bodySmall.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
+                    const SizedBox(width: 4),
                     GestureDetector(
                       onTap: () => Navigator.of(context).pop(),
                       child: Text(
-                        AppStrings.login,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        l10n.get('login'),
+                        style: AppTextStyles.bodySmall.copyWith(color: theme.primaryColor, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ],
@@ -308,6 +257,8 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Widget _buildField({
+    required ThemeData theme,
+    required AppLocalizations l10n,
     required String label,
     required String hint,
     required TextEditingController controller,
@@ -321,7 +272,7 @@ class _SignupScreenState extends State<SignupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: AppTextStyles.labelLarge),
+        Text(label, style: AppTextStyles.labelLarge.copyWith(color: theme.colorScheme.onSurface)),
         const SizedBox(height: AppSizes.sm),
         TextFormField(
           controller: controller,
@@ -329,44 +280,20 @@ class _SignupScreenState extends State<SignupScreen> {
           keyboardType: keyboardType,
           obscureText: obscureText,
           maxLines: maxLines,
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            color: AppColors.textPrimary,
-          ),
+          style: GoogleFonts.poppins(fontSize: 14, color: theme.colorScheme.onSurface),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.poppins(
-              color: AppColors.textSecondary,
-              fontSize: 14,
-            ),
+            hintStyle: GoogleFonts.poppins(color: theme.colorScheme.onSurface.withValues(alpha: 0.4), fontSize: 14),
             filled: true,
-            fillColor: AppColors.surface,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: AppSizes.md,
-              vertical: AppSizes.md,
-            ),
-            prefixIcon: Icon(icon, color: AppColors.primary, size: AppSizes.iconMd),
+            fillColor: theme.colorScheme.surface,
+            contentPadding: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.md),
+            prefixIcon: Icon(icon, color: theme.primaryColor, size: AppSizes.iconMd),
             suffixIcon: suffix,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-              borderSide: const BorderSide(color: AppColors.primary, width: 2),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-              borderSide: const BorderSide(color: AppColors.error),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-              borderSide: const BorderSide(color: AppColors.error, width: 2),
-            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.dividerColor)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.dividerColor)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.primaryColor, width: 2)),
+            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: const BorderSide(color: Colors.redAccent)),
+            focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: const BorderSide(color: Colors.redAccent, width: 2)),
           ),
         ),
       ],

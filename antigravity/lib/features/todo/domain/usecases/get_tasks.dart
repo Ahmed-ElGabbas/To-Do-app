@@ -1,5 +1,5 @@
-import 'package:antigravity/features/todo/domain/entities/task.dart';
-import 'package:antigravity/features/todo/domain/repositories/task_repository.dart';
+import 'package:tasko/features/todo/domain/entities/task.dart';
+import 'package:tasko/features/todo/domain/repositories/task_repository.dart';
 
 class GetTasks {
   final TaskRepository repository;
