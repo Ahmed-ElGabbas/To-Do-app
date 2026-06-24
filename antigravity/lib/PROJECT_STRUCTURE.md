@@ -420,3 +420,42 @@ flutter:
 - `isLoggedIn` saved permanently — user never re-logs unless they tap Logout
 - Dark mode and language change take effect INSTANTLY without restart
 - `flutter analyze` passes with zero issues ✅
+
+---
+
+## Security & Privacy Risks
+
+- **Plaintext Credentials:** Passwords are stored in plaintext at `'auth_password'` in `SharedPreferences`.
+- **Account Isolation Failure:** The tasks storage key (`'tasks'`) is global. If a new user signs up (which overwrites the user profile in local storage), the previously created tasks remain visible and active. There is no user isolation or data purging upon account switching/signup.
+- **Local Authentication Bypass:** The login check compares against local plain text fields. Since only one profile can be saved at a time, there is no multi-user support.
+
+---
+
+## Technical Debt & Architectural Gaps
+
+- **Direct Storage Bypasses:** `SettingsProvider` bypasses the `LocalStorageService` wrapper and instantiates `SharedPreferences.getInstance()` directly.
+- **Home Screen Date Filtering Limitation:** `todayTasks` and `tomorrowTasks` in `TaskProvider` perform exact string matches on `'today'` and `'tomorrow'`. Tasks saved with dates formatted as `yyyy-MM-dd` (e.g. `'2026-06-11'`) will not appear in the TODAY/TOMORROW sections of `HomeScreen` even if they refer to the current or next day.
+- **No Date Picker in AddTaskScreen:** `AddTaskScreen` does not provide a standard date picker. Users can only select "Today" or "Tomorrow" unless they navigate from `CalendarScreen` (which pre-populates a custom date chip).
+- **Absolute Image Path Persistence:** The profile picture path is saved as a local absolute path (`picked.path`). This can easily break across device runs if the app's sandboxed path changes or permissions are modified.
+
+---
+
+## Dead Code & Unused Artifacts
+
+- **Clean Architecture Scaffolding:** The entire clean architecture implementation for the todo feature is unused. `TaskProvider` communicates directly with `LocalStorageService`, bypassing:
+  - [local_data_source.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/data/datasources/local_data_source.dart)
+  - [task_repository_impl.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/data/repositories/task_repository_impl.dart)
+  - [task_repository.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/domain/repositories/task_repository.dart)
+  - [add_task.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/domain/usecases/add_task.dart)
+  - [delete_task.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/domain/usecases/delete_task.dart)
+  - [get_tasks.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/domain/usecases/get_tasks.dart)
+  - [update_task.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/domain/usecases/update_task.dart)
+- **Unused State:** [task_state.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/presentation/state/task_state.dart) (Unused `TaskState` enum).
+
+---
+
+## Hidden & Platform Dependencies
+
+- **Local Notification Receivers:** Setup in `AndroidManifest.xml` (e.g. `ScheduledNotificationReceiver`, `ScheduledNotificationBootReceiver`) to ensure notifications survive device restarts.
+- **URL Launcher Queries:** Custom `<queries>` intents in `AndroidManifest.xml` (for `mailto:`, `https:`, `http:`) to avoid crashes/silent failures on Android 11+.
+- **Timezone Database Setup:** Direct dependency on the `timezone` package loaded in `main.dart` with `tz_data.initializeTimeZones()` to schedule exact local notifications.

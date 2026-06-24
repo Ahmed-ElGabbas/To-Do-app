@@ -17,23 +17,35 @@ class TaskProvider extends ChangeNotifier {
   List<Task> get tasks => _tasks;
   List<Task> get allTasks => _tasks;
 
-  /// Tasks with date == "today" (exact string match)
-  List<Task> get todayTasks =>
-      _tasks.where((t) => t.date == 'today').toList();
+  /// Tasks with date matching today (relative or ISO format) timezone-safely
+  List<Task> get todayTasks {
+    final now = DateTime.now();
+    final todayDate = DateTime(now.year, now.month, now.day);
+    return _tasks.where((t) => _isSameDate(t.date, todayDate)).toList();
+  }
 
-  /// Tasks with date == "tomorrow" (exact string match)
-  List<Task> get tomorrowTasks =>
-      _tasks.where((t) => t.date == 'tomorrow').toList();
+  /// Tasks with date matching tomorrow (relative or ISO format) timezone-safely
+  List<Task> get tomorrowTasks {
+    final now = DateTime.now();
+    final tomorrowDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    return _tasks.where((t) => _isSameDate(t.date, tomorrowDate)).toList();
+  }
 
   /// Number of completed tasks
   int get completedCount => _tasks.where((t) => t.isDone).length;
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
-  /// Call once at startup (inside MultiProvider create).
+  /// Call once at startup (inside MultiProvider create) or on session change.
   Future<void> loadTasks() async {
-    final models = _storage.loadTasks(); // synchronous read
-    _tasks = List<Task>.from(models);
+    final email = _storage.read('auth_email') ?? '';
+    final isLoggedIn = _storage.readBool('auth_is_logged_in') ?? false;
+    if (isLoggedIn && email.isNotEmpty) {
+      final models = _storage.loadTasksForUser(email);
+      _tasks = List<Task>.from(models);
+    } else {
+      _tasks = [];
+    }
     notifyListeners();
   }
 
@@ -113,7 +125,30 @@ class TaskProvider extends ChangeNotifier {
 
   /// Convert all tasks to TaskModel and write to SharedPreferences.
   Future<void> _saveAll() async {
-    final models = _tasks.map(TaskModel.fromEntity).toList();
-    await _storage.saveTasks(models);
+    final email = _storage.read('auth_email') ?? '';
+    final models = _tasks.map(TaskModel.fromEntity).toList();ش
+    await _storage.saveTasksForUser(email, models);
+  }
+
+  bool _isSameDate(String dateStr, DateTime targetDate) {
+    final d = dateStr.toLowerCase().trim();
+    final target = DateTime(targetDate.year, targetDate.month, targetDate.day);
+    if (d == 'today') {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      return target == today;
+    }
+    if (d == 'tomorrow') {
+      final now = DateTime.now();
+      final tomorrow = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+      return target == tomorrow;
+    }
+    try {
+      final parsed = DateTime.parse(d);
+      final parsedDate = DateTime(parsed.year, parsed.month, parsed.day);
+      return target == parsedDate;
+    } catch (_) {
+      return false;
+    }
   }
 }

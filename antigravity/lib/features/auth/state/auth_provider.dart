@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:tasko/shared/services/local_storage_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   final _storage = LocalStorageService();
+  final _secureStorage = const FlutterSecureStorage();
 
   // Keys
   static const _kIsLoggedIn = 'auth_is_logged_in';
@@ -41,11 +43,21 @@ class AuthProvider extends ChangeNotifier {
     _isLoggedIn = _storage.readBool(_kIsLoggedIn) ?? false;
     _name = _storage.read(_kName) ?? '';
     _email = _storage.read(_kEmail) ?? '';
-    _password = _storage.read(_kPassword) ?? '';
     _phone = _storage.read(_kPhone) ?? '';
     _country = _storage.read(_kCountry) ?? '';
     _bio = _storage.read(_kBio) ?? '';
     _profileImagePath = _storage.read(_kProfileImagePath) ?? '';
+
+    // Secure Storage Password Load & Migration
+    final legacyPassword = _storage.read(_kPassword);
+    if (legacyPassword != null && legacyPassword.isNotEmpty) {
+      await _secureStorage.write(key: _kPassword, value: legacyPassword);
+      await _storage.delete(_kPassword); // clean legacy plain text key
+      _password = legacyPassword;
+    } else {
+      _password = await _secureStorage.read(key: _kPassword) ?? '';
+    }
+
     notifyListeners();
   }
 
@@ -140,7 +152,7 @@ class AuthProvider extends ChangeNotifier {
     await _storage.writeBool(_kIsLoggedIn, _isLoggedIn);
     await _storage.write(_kName, _name);
     await _storage.write(_kEmail, _email);
-    await _storage.write(_kPassword, _password);
+    await _secureStorage.write(key: _kPassword, value: _password);
     await _storage.write(_kPhone, _phone);
     await _storage.write(_kCountry, _country);
     await _storage.write(_kBio, _bio);

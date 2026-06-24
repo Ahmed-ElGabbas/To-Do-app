@@ -7,6 +7,7 @@ import 'package:tasko/core/constants/strings.dart';
 import 'package:tasko/core/theme/text_styles.dart';
 import 'package:tasko/core/localization/app_localizations.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
+import 'package:tasko/features/todo/presentation/state/task_provider.dart';
 import 'package:tasko/features/auth/presentation/screens/signup_screen.dart';
 import 'package:tasko/features/todo/presentation/widgets/main_scaffold.dart';
 
@@ -60,6 +61,10 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
     if (success) {
+      if (mounted) {
+        await context.read<TaskProvider>().loadTasks();
+      }
+      if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const MainScaffold()),
         (route) => false,

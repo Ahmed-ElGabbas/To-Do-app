@@ -19,17 +19,30 @@ class LocalStorageService {
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
 
-  /// Load all tasks from storage. Returns empty list if none saved yet.
-  List<TaskModel> loadTasks() {
-    final json = _prefs.getString(_tasksKey);
+  /// Load all tasks for a specific user.
+  /// Handles automatic migration of legacy global tasks to the user's isolated storage.
+  List<TaskModel> loadTasksForUser(String email) {
+    final userKey = email.isNotEmpty ? 'tasks_$email' : _tasksKey;
+
+    if (email.isNotEmpty && !_prefs.containsKey(userKey)) {
+      final legacyJson = _prefs.getString(_tasksKey);
+      if (legacyJson != null && legacyJson.isNotEmpty) {
+        _prefs.setString(userKey, legacyJson);
+        _prefs.remove(_tasksKey); // clean legacy global key
+        return TaskModel.decode(legacyJson);
+      }
+    }
+
+    final json = _prefs.getString(userKey);
     if (json == null || json.isEmpty) return [];
     return TaskModel.decode(json);
   }
 
-  /// Save all tasks to storage immediately.
-  Future<void> saveTasks(List<TaskModel> tasks) async {
+  /// Save all tasks for a specific user immediately.
+  Future<void> saveTasksForUser(String email, List<TaskModel> tasks) async {
+    final userKey = email.isNotEmpty ? 'tasks_$email' : _tasksKey;
     final encoded = TaskModel.encode(tasks);
-    await _prefs.setString(_tasksKey, encoded);
+    await _prefs.setString(userKey, encoded);
   }
 
   // ── Generic key-value (used by AuthProvider / SettingsProvider) ───────────

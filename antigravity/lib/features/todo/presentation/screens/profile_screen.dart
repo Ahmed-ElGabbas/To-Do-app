@@ -8,6 +8,7 @@ import 'package:tasko/core/constants/strings.dart';
 import 'package:tasko/core/theme/text_styles.dart';
 import 'package:tasko/core/localization/app_localizations.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
+import 'package:tasko/features/todo/presentation/state/task_provider.dart';
 import 'package:tasko/features/todo/presentation/screens/settings_screen.dart';
 import 'package:tasko/features/auth/presentation/screens/login_screen.dart';
 import 'package:tasko/features/todo/presentation/screens/edit_profile_screen.dart';
@@ -160,6 +161,9 @@ class ProfileScreen extends StatelessWidget {
             onPressed: () async {
               Navigator.of(ctx).pop();
               await auth.logout();
+              if (context.mounted) {
+                await context.read<TaskProvider>().loadTasks();
+              }
               if (context.mounted) {
                 Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
               }
