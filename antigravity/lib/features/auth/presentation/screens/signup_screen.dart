@@ -3,9 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:tasko/core/constants/colors.dart';
 import 'package:tasko/core/constants/sizes.dart';
-import 'package:tasko/core/constants/strings.dart';
 import 'package:tasko/core/theme/text_styles.dart';
 import 'package:tasko/core/localization/app_localizations.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
@@ -45,34 +43,52 @@ class _SignupScreenState extends State<SignupScreen> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
     if (picked != null) setState(() => _profileImagePath = picked.path);
   }
 
   String? _validateRequired(String? value, AppLocalizations l10n) {
-    if (value == null || value.trim().isEmpty) return l10n.get('field_required');
+    if (value == null || value.trim().isEmpty) {
+      return l10n.get('field_required');
+    }
     return null;
   }
 
   String? _validateEmail(String? value, AppLocalizations l10n) {
-    if (value == null || value.trim().isEmpty) return l10n.get('field_required');
+    if (value == null || value.trim().isEmpty) {
+      return l10n.get('field_required');
+    }
     final emailRegex = RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!emailRegex.hasMatch(value.trim())) return l10n.get('invalid_email');
+    if (!emailRegex.hasMatch(value.trim())) {
+      return l10n.get('invalid_email');
+    }
     return null;
   }
 
   String? _validatePassword(String? value, AppLocalizations l10n) {
-    if (value == null || value.isEmpty) return l10n.get('field_required');
-    if (value.length < 6) return l10n.get('password_too_short');
+    if (value == null || value.isEmpty) {
+      return l10n.get('field_required');
+    }
+    if (value.length < 6) {
+      return l10n.get('password_too_short');
+    }
     return null;
   }
 
   Future<void> _createAccount() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final form = _formKey.currentState;
+    if (form == null || !form.validate()) {
+      return;
+    }
     setState(() => _isLoading = true);
 
     final auth = context.read<AuthProvider>();
-    final l10n = AppLocalizations.of(context);
+    final taskProvider = context.read<TaskProvider>();
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
     await auth.signUp(
       name: _nameController.text.trim(),
       email: _emailController.text.trim(),
@@ -84,15 +100,18 @@ class _SignupScreenState extends State<SignupScreen> {
     );
 
     if (mounted) {
-      await context.read<TaskProvider>().loadTasks();
+      await taskProvider.loadTasks();
     }
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Account created successfully!'), backgroundColor: Colors.green),
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Account created successfully!'),
+        backgroundColor: Colors.green,
+      ),
     );
-    Navigator.of(context).pushAndRemoveUntil(
+    navigator.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const MainScaffold()),
       (_) => false,
     );
@@ -109,7 +128,10 @@ class _SignupScreenState extends State<SignupScreen> {
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: theme.colorScheme.onSurface),
+          icon: Icon(
+            Icons.arrow_back_rounded,
+            color: theme.colorScheme.onSurface,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -132,28 +154,57 @@ class _SignupScreenState extends State<SignupScreen> {
                         height: 110,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: theme.primaryColor, width: 3),
+                          border: Border.all(
+                            color: theme.primaryColor,
+                            width: 3,
+                          ),
                           color: theme.colorScheme.surface,
                         ),
                         child: ClipOval(
                           child: _profileImagePath != null
-                              ? Image.file(File(_profileImagePath!), fit: BoxFit.cover)
-                              : Icon(Icons.person_rounded, size: 60, color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+                              ? Image.file(
+                                  File(_profileImagePath!),
+                                  fit: BoxFit.cover,
+                                )
+                              : Icon(
+                                  Icons.person_rounded,
+                                  size: 60,
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.4,
+                                  ),
+                                ),
                         ),
                       ),
                       Container(
                         width: 32,
                         height: 32,
-                        decoration: BoxDecoration(color: theme.primaryColor, shape: BoxShape.circle),
-                        child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                        decoration: BoxDecoration(
+                          color: theme.primaryColor,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.camera_alt_rounded,
+                          size: 18,
+                          color: Colors.white,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: AppSizes.sm),
-                Text(l10n.get('tap_to_change') ?? 'Tap to change', style: AppTextStyles.caption.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
+                Text(
+                  l10n.get('tap_to_change'),
+                  style: AppTextStyles.caption.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
                 const SizedBox(height: AppSizes.xl),
-                Text(l10n.get('sign_up'), style: AppTextStyles.heading2.copyWith(color: theme.colorScheme.onSurface)),
+                Text(
+                  l10n.get('sign_up'),
+                  style: AppTextStyles.heading2.copyWith(
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
                 const SizedBox(height: AppSizes.xxl),
                 _buildField(
                   theme: theme,
@@ -186,8 +237,15 @@ class _SignupScreenState extends State<SignupScreen> {
                   obscureText: _obscurePassword,
                   validator: (v) => _validatePassword(v, l10n),
                   suffix: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: theme.primaryColor, size: AppSizes.iconMd),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: theme.primaryColor,
+                      size: AppSizes.iconMd,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
                 const SizedBox(height: AppSizes.md),
@@ -228,25 +286,49 @@ class _SignupScreenState extends State<SignupScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: theme.primaryColor,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.buttonRadius)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppSizes.buttonRadius,
+                        ),
+                      ),
                       elevation: 0,
                     ),
                     child: _isLoading
-                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                        : Text(l10n.get('sign_up'), style: AppTextStyles.button),
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            l10n.get('sign_up'),
+                            style: AppTextStyles.button,
+                          ),
                   ),
                 ),
                 const SizedBox(height: AppSizes.xl),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(l10n.get('have_account'), style: AppTextStyles.bodySmall.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
+                    Text(
+                      l10n.get('have_account'),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
+                    ),
                     const SizedBox(width: 4),
                     GestureDetector(
                       onTap: () => Navigator.of(context).pop(),
                       child: Text(
                         l10n.get('login'),
-                        style: AppTextStyles.bodySmall.copyWith(color: theme.primaryColor, fontWeight: FontWeight.w700),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: theme.primaryColor,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ],
@@ -276,7 +358,12 @@ class _SignupScreenState extends State<SignupScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: AppTextStyles.labelLarge.copyWith(color: theme.colorScheme.onSurface)),
+        Text(
+          label,
+          style: AppTextStyles.labelLarge.copyWith(
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
         const SizedBox(height: AppSizes.sm),
         TextFormField(
           controller: controller,
@@ -284,20 +371,48 @@ class _SignupScreenState extends State<SignupScreen> {
           keyboardType: keyboardType,
           obscureText: obscureText,
           maxLines: maxLines,
-          style: GoogleFonts.poppins(fontSize: 14, color: theme.colorScheme.onSurface),
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            color: theme.colorScheme.onSurface,
+          ),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.poppins(color: theme.colorScheme.onSurface.withValues(alpha: 0.4), fontSize: 14),
+            hintStyle: GoogleFonts.poppins(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+              fontSize: 14,
+            ),
             filled: true,
             fillColor: theme.colorScheme.surface,
-            contentPadding: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.md),
-            prefixIcon: Icon(icon, color: theme.primaryColor, size: AppSizes.iconMd),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSizes.md,
+              vertical: AppSizes.md,
+            ),
+            prefixIcon: Icon(
+              icon,
+              color: theme.primaryColor,
+              size: AppSizes.iconMd,
+            ),
             suffixIcon: suffix,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.dividerColor)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.dividerColor)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.primaryColor, width: 2)),
-            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: const BorderSide(color: Colors.redAccent)),
-            focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: const BorderSide(color: Colors.redAccent, width: 2)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+              borderSide: BorderSide(color: theme.dividerColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+              borderSide: BorderSide(color: theme.dividerColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+              borderSide: BorderSide(color: theme.primaryColor, width: 2),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+              borderSide: const BorderSide(color: Colors.redAccent),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+            ),
           ),
         ),
       ],

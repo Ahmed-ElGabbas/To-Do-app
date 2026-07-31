@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
@@ -61,21 +62,26 @@ class NotificationService {
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
-    } catch (_) {
+    } catch (e) {
       // Silent fail — notification scheduling is best-effort
+      debugPrint('NotificationService: failed to schedule notification (id=$id): $e');
     }
   }
 
   static Future<void> cancelNotification(int id) async {
     try {
       await _plugin.cancel(id);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('NotificationService: failed to cancel notification (id=$id): $e');
+    }
   }
 
   static Future<void> cancelAll() async {
     try {
       await _plugin.cancelAll();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('NotificationService: failed to cancel all notifications: $e');
+    }
   }
 
   /// Converts a time string like "06:30 AM" and a date ("today"/"tomorrow")
@@ -101,7 +107,8 @@ class NotificationService {
       if (period == 'PM' && hour != 12) hour += 12;
       if (period == 'AM' && hour == 12) hour = 0;
       return base.add(Duration(hours: hour, minutes: minute));
-    } catch (_) {
+    } catch (e) {
+      debugPrint('NotificationService: failed to parse task date/time (date="$date", time="$time"): $e');
       return null;
     }
   }

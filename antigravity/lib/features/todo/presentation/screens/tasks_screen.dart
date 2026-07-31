@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:tasko/core/constants/colors.dart';
-import 'package:tasko/core/constants/strings.dart';
 import 'package:tasko/core/constants/sizes.dart';
 import 'package:tasko/core/theme/text_styles.dart';
 import 'package:tasko/core/localization/app_localizations.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
-import 'package:tasko/features/todo/presentation/state/settings_provider.dart';
 import 'package:tasko/features/todo/presentation/widgets/task_card.dart';
 import 'package:tasko/features/todo/presentation/screens/add_task_screen.dart';
 import 'package:tasko/features/todo/presentation/screens/task_details_screen.dart';

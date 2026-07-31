@@ -6,7 +6,7 @@ class GetTasks {
 
   GetTasks(this.repository);
 
-  Future<List<Task>> call() async {
-    return repository.getTasks();
+  Future<List<Task>> call(String email) async {
+    return repository.getTasks(email);
   }
 }

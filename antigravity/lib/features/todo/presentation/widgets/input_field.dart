@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:tasko/core/constants/colors.dart';
 import 'package:tasko/core/constants/sizes.dart';
 import 'package:tasko/core/theme/text_styles.dart';
 

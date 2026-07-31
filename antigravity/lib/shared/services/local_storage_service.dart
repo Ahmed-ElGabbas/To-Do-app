@@ -45,6 +45,20 @@ class LocalStorageService {
     await _prefs.setString(userKey, encoded);
   }
 
+  /// Migrate a user's stored tasks from one email key to another.
+  /// Safe no-op when: old == new, the old key is absent, or the destination
+  /// key already has data (existing data is never silently overwritten).
+  Future<void> renameUserTasks(String oldEmail, String newEmail) async {
+    if (oldEmail == newEmail) return;
+    final oldKey = oldEmail.isNotEmpty ? 'tasks_$oldEmail' : _tasksKey;
+    final newKey = newEmail.isNotEmpty ? 'tasks_$newEmail' : _tasksKey;
+    final value = _prefs.getString(oldKey);
+    if (value == null || value.isEmpty) return;
+    if (_prefs.containsKey(newKey)) return;
+    await _prefs.setString(newKey, value);
+    await _prefs.remove(oldKey);
+  }
+
   // ── Generic key-value (used by AuthProvider / SettingsProvider) ───────────
 
   String? read(String key) => _prefs.getString(key);

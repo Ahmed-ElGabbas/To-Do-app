@@ -8,7 +8,6 @@ import 'package:tasko/core/utils/helpers.dart';
 import 'package:tasko/core/localization/app_localizations.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
-import 'package:tasko/features/todo/presentation/state/settings_provider.dart';
 import 'package:tasko/features/todo/presentation/widgets/task_card.dart';
 import 'package:tasko/features/todo/presentation/screens/add_task_screen.dart';
 import 'package:tasko/features/todo/presentation/screens/task_details_screen.dart';

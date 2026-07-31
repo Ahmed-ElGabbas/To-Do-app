@@ -145,6 +145,9 @@ class AppStrings {
   static const String facebook = 'Facebook';
   static const String instagram = 'Instagram';
   static const String twitter = 'Twitter';
+  static const String facebookUrl = 'https://www.facebook.com/share/1BHmoqjc5b/';
+  static const String instagramUrl = 'https://www.instagram.com/elg.abbas?igsh=NWlvYzliNjdsb3Nz';
+  static const String twitterUrl = 'https://x.com/A7med_ElGabbas';
 
   // Notifications dialog
   static const String upcomingTasks = 'Upcoming Tasks';

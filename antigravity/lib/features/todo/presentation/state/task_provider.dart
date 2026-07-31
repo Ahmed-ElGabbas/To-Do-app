@@ -1,16 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:tasko/features/todo/domain/entities/task.dart';
-import 'package:tasko/features/todo/data/models/task_model.dart';
+import 'package:tasko/features/todo/domain/repositories/task_repository.dart';
+import 'package:tasko/features/todo/domain/usecases/add_task.dart';
+import 'package:tasko/features/todo/domain/usecases/delete_task.dart';
+import 'package:tasko/features/todo/domain/usecases/get_tasks.dart';
+import 'package:tasko/features/todo/domain/usecases/update_task.dart';
 import 'package:tasko/shared/services/local_storage_service.dart';
 import 'package:tasko/shared/services/notification_service.dart';
 
 /// Simple ChangeNotifier for task management.
-/// Talks directly to LocalStorageService — no use-case layer.
-/// Errors are NOT silently swallowed — they propagate to the caller.
+/// Delegates task persistence to TaskRepository via the GetTasks/AddTask/UpdateTask/DeleteTask use-cases.
+/// Notification-scheduling errors are intentionally swallowed (best-effort, non-fatal) and are not currently logged.
 class TaskProvider extends ChangeNotifier {
   final _storage = LocalStorageService();
+  final TaskRepository _repository;
+  final GetTasks _getTasks;
+  final AddTask _addTask;
+  final UpdateTask _updateTask;
+  final DeleteTask _deleteTask;
 
   List<Task> _tasks = [];
+
+  // ── Constructor ─────────────────────────────────────────────────────────────
+
+  TaskProvider(TaskRepository repository)
+      : _repository = repository,
+        _getTasks = GetTasks(repository),
+        _addTask = AddTask(repository),
+        _updateTask = UpdateTask(repository),
+        _deleteTask = DeleteTask(repository);
 
   // ── Getters ───────────────────────────────────────────────────────────────
 
@@ -41,8 +59,7 @@ class TaskProvider extends ChangeNotifier {
     final email = _storage.read('auth_email') ?? '';
     final isLoggedIn = _storage.readBool('auth_is_logged_in') ?? false;
     if (isLoggedIn && email.isNotEmpty) {
-      final models = _storage.loadTasksForUser(email);
-      _tasks = List<Task>.from(models);
+      _tasks = List<Task>.of(await _getTasks.call(email));
     } else {
       _tasks = [];
     }
@@ -53,15 +70,18 @@ class TaskProvider extends ChangeNotifier {
 
   /// Adds a task.
   /// Step 1: add to in-memory list and notify → UI updates INSTANTLY.
-  /// Step 2: persist to SharedPreferences.
+  /// Step 2: persist via use-case.
   /// Step 3: schedule notification (best-effort).
   Future<void> addTask(Task task) async {
     // Instant UI update — happens synchronously before any await
     _tasks.add(task);
     notifyListeners();
 
-    // Persist
-    await _saveAll();
+    // Persist via use-case
+    final email = _storage.read('auth_email') ?? '';
+    if (email.isNotEmpty) {
+      await _addTask.call(email, task);
+    }
 
     // Schedule notification (silent fail — never crashes the app)
     try {
@@ -84,7 +104,11 @@ class TaskProvider extends ChangeNotifier {
     if (index == -1) return;
     _tasks[index] = _tasks[index].copyWith(isDone: !_tasks[index].isDone);
     notifyListeners();
-    await _saveAll();
+
+    final email = _storage.read('auth_email') ?? '';
+    if (email.isNotEmpty) {
+      await _updateTask.call(email, _tasks[index]);
+    }
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────
@@ -94,7 +118,11 @@ class TaskProvider extends ChangeNotifier {
         orElse: () => throw StateError('Task $id not found'));
     _tasks.removeWhere((t) => t.id == id);
     notifyListeners();
-    await _saveAll();
+
+    final email = _storage.read('auth_email') ?? '';
+    if (email.isNotEmpty) {
+      await _deleteTask.call(email, id);
+    }
     try {
       await NotificationService.cancelNotification(task.notificationId);
     } catch (_) {}
@@ -107,7 +135,11 @@ class TaskProvider extends ChangeNotifier {
     if (index == -1) return;
     _tasks[index] = task;
     notifyListeners();
-    await _saveAll();
+
+    final email = _storage.read('auth_email') ?? '';
+    if (email.isNotEmpty) {
+      await _updateTask.call(email, task);
+    }
   }
 
   // ── Clear all ─────────────────────────────────────────────────────────────
@@ -115,20 +147,17 @@ class TaskProvider extends ChangeNotifier {
   Future<void> clearAll() async {
     _tasks.clear();
     notifyListeners();
-    await _saveAll();
+
+    final email = _storage.read('auth_email') ?? '';
+    if (email.isNotEmpty) {
+      await _repository.clearAllTasks(email);
+    }
     try {
       await NotificationService.cancelAll();
     } catch (_) {}
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
-
-  /// Convert all tasks to TaskModel and write to SharedPreferences.
-  Future<void> _saveAll() async {
-    final email = _storage.read('auth_email') ?? '';
-    final models = _tasks.map(TaskModel.fromEntity).toList();ش
-    await _storage.saveTasksForUser(email, models);
-  }
 
   bool _isSameDate(String dateStr, DateTime targetDate) {
     final d = dateStr.toLowerCase().trim();
@@ -147,7 +176,8 @@ class TaskProvider extends ChangeNotifier {
       final parsed = DateTime.parse(d);
       final parsedDate = DateTime(parsed.year, parsed.month, parsed.day);
       return target == parsedDate;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('TaskProvider: failed to parse date string "$dateStr": $e');
       return false;
     }
   }

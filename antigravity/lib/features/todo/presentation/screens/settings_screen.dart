@@ -7,6 +7,7 @@ import 'package:tasko/core/theme/text_styles.dart';
 import 'package:tasko/core/localization/app_localizations.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
 import 'package:tasko/features/todo/presentation/state/settings_provider.dart';
+import 'package:tasko/features/todo/presentation/state/task_provider.dart';
 import 'package:tasko/shared/services/email_service.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -209,6 +210,9 @@ class SettingsScreen extends StatelessWidget {
                     content: Text(ok ? 'Email updated!' : 'Incorrect password.'),
                     backgroundColor: ok ? Colors.green : Colors.red,
                   ));
+                  if (ok) {
+                    context.read<TaskProvider>().loadTasks();
+                  }
                 },
                 child: Text(l10n.get('save'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),

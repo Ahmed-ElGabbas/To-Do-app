@@ -1,30 +1,92 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tasko/features/auth/state/auth_provider.dart';
+import 'package:tasko/features/auth/presentation/screens/login_screen.dart';
+import 'package:tasko/features/todo/data/datasources/local_data_source.dart';
+import 'package:tasko/features/todo/data/repositories/task_repository_impl.dart';
+import 'package:tasko/features/todo/domain/repositories/task_repository.dart';
+import 'package:tasko/features/todo/presentation/screens/splash_screen.dart';
+import 'package:tasko/features/todo/presentation/state/settings_provider.dart';
+import 'package:tasko/features/todo/presentation/state/task_provider.dart';
+import 'package:tasko/features/todo/presentation/widgets/main_scaffold.dart';
 import 'package:tasko/main.dart';
+import 'package:tasko/shared/services/local_storage_service.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  TestWidgetsFlutterBinding.ensureInitialized();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  setUpAll(() {
+    GoogleFonts.config.allowRuntimeFetching = false;
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+      (MethodCall methodCall) async => null,
+    );
+  });
+
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    await LocalStorageService().init();
+  });
+
+  Widget buildApp() {
+    final localDataSource = LocalDataSource(LocalStorageService());
+    final taskRepository = TaskRepositoryImpl(localDataSource) as TaskRepository;
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => TaskProvider(taskRepository)..loadTasks()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()..loadUser()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()..loadSettings()),
+      ],
+      child: const MyApp(),
+    );
+  }
+
+  testWidgets('app launches and shows the splash screen', (tester) async {
+    await tester.pumpWidget(buildApp());
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.byType(SplashScreen), findsOneWidget);
+    expect(find.text('Tasko'), findsOneWidget);
+    expect(find.text('Organize your day'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('splash navigates to the login screen when signed out',
+      (tester) async {
+    await tester.pumpWidget(buildApp());
+    await tester.pump();
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SplashScreen), findsNothing);
+    expect(find.byType(LoginScreen), findsOneWidget);
+  });
+
+  testWidgets('splash navigates to the main scaffold when signed in',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'auth_is_logged_in': true,
+      'auth_name': 'Test User',
+      'auth_email': 'test@test.com',
+    });
+    await LocalStorageService().init();
+
+    await tester.pumpWidget(buildApp());
+    await tester.pump();
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SplashScreen), findsNothing);
+    expect(find.byType(MainScaffold), findsOneWidget);
   });
 }

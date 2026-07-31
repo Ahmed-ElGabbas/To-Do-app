@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:tasko/core/utils/password_hasher.dart';
 import 'package:tasko/shared/services/local_storage_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -11,6 +12,8 @@ class AuthProvider extends ChangeNotifier {
   static const _kName = 'auth_name';
   static const _kEmail = 'auth_email';
   static const _kPassword = 'auth_password';
+  static const _kPasswordHash = 'auth_password_hash';
+  static const _kPasswordSalt = 'auth_password_salt';
   static const _kPhone = 'auth_phone';
   static const _kCountry = 'auth_country';
   static const _kBio = 'auth_bio';
@@ -20,7 +23,8 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoggedIn = false;
   String _name = '';
   String _email = '';
-  String _password = '';
+  String _passwordHash = '';
+  String _passwordSalt = '';
   String _phone = '';
   String _country = '';
   String _bio = '';
@@ -30,7 +34,6 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoggedIn => _isLoggedIn;
   String get name => _name;
   String get email => _email;
-  String get password => _password;
   String get phone => _phone;
   String get country => _country;
   String get bio => _bio;
@@ -48,14 +51,32 @@ class AuthProvider extends ChangeNotifier {
     _bio = _storage.read(_kBio) ?? '';
     _profileImagePath = _storage.read(_kProfileImagePath) ?? '';
 
-    // Secure Storage Password Load & Migration
+    // Step 1: Legacy migration — SharedPreferences plaintext → secure storage
     final legacyPassword = _storage.read(_kPassword);
     if (legacyPassword != null && legacyPassword.isNotEmpty) {
       await _secureStorage.write(key: _kPassword, value: legacyPassword);
-      await _storage.delete(_kPassword); // clean legacy plain text key
-      _password = legacyPassword;
+      await _storage.delete(_kPassword);
+    }
+
+    // Step 2: Upgrade unsalted secure-storage password to hash+salt format
+    final existingSalt = await _secureStorage.read(key: _kPasswordSalt);
+    if (existingSalt == null || existingSalt.isEmpty) {
+      final rawPassword = await _secureStorage.read(key: _kPassword);
+      if (rawPassword != null && rawPassword.isNotEmpty) {
+        final salt = generateSalt();
+        final hash = hashPassword(rawPassword, salt);
+        await _secureStorage.write(key: _kPasswordHash, value: hash);
+        await _secureStorage.write(key: _kPasswordSalt, value: salt);
+        await _secureStorage.delete(key: _kPassword);
+        _passwordHash = hash;
+        _passwordSalt = salt;
+      } else {
+        _passwordHash = '';
+        _passwordSalt = '';
+      }
     } else {
-      _password = await _secureStorage.read(key: _kPassword) ?? '';
+      _passwordHash = await _secureStorage.read(key: _kPasswordHash) ?? '';
+      _passwordSalt = existingSalt;
     }
 
     notifyListeners();
@@ -73,12 +94,15 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     _name = name;
     _email = email;
-    _password = password;
     _phone = phone;
     _country = country;
     _bio = bio;
     _profileImagePath = profileImagePath;
     _isLoggedIn = true;
+
+    final salt = generateSalt();
+    _passwordHash = hashPassword(password, salt);
+    _passwordSalt = salt;
 
     await _save();
     notifyListeners();
@@ -90,12 +114,14 @@ class AuthProvider extends ChangeNotifier {
     required String email,
     required String password,
   }) async {
-    // Basic verification against stored credentials
-    if (_email == email && _password == password) {
-      _isLoggedIn = true;
-      await _save();
-      notifyListeners();
-      return true;
+    if (_email == email && _passwordHash.isNotEmpty) {
+      final inputHash = hashPassword(password, _passwordSalt);
+      if (_passwordHash == inputHash) {
+        _isLoggedIn = true;
+        await _save();
+        notifyListeners();
+        return true;
+      }
     }
     return false;
   }
@@ -129,7 +155,9 @@ class AuthProvider extends ChangeNotifier {
     required String currentPassword,
     required String newEmail,
   }) async {
-    if (_password != currentPassword) return false;
+    final inputHash = hashPassword(currentPassword, _passwordSalt);
+    if (_passwordHash != inputHash) return false;
+    await _storage.renameUserTasks(_email, newEmail);
     _email = newEmail;
     await _save();
     notifyListeners();
@@ -141,8 +169,27 @@ class AuthProvider extends ChangeNotifier {
     required String oldPassword,
     required String newPassword,
   }) async {
-    if (_password != oldPassword) return false;
-    _password = newPassword;
+    final inputHash = hashPassword(oldPassword, _passwordSalt);
+    if (_passwordHash != inputHash) return false;
+    final salt = generateSalt();
+    _passwordHash = hashPassword(newPassword, salt);
+    _passwordSalt = salt;
+    await _save();
+    notifyListeners();
+    return true;
+  }
+
+  /// Reset password after verifying the registered email.
+  /// Local-only recovery: the email is the only identity check available
+  /// without a backend, so this must be surfaced honestly in the UI.
+  Future<bool> resetPassword({
+    required String email,
+    required String newPassword,
+  }) async {
+    if (_email != email || _passwordHash.isEmpty) return false;
+    final salt = generateSalt();
+    _passwordHash = hashPassword(newPassword, salt);
+    _passwordSalt = salt;
     await _save();
     notifyListeners();
     return true;
@@ -152,7 +199,8 @@ class AuthProvider extends ChangeNotifier {
     await _storage.writeBool(_kIsLoggedIn, _isLoggedIn);
     await _storage.write(_kName, _name);
     await _storage.write(_kEmail, _email);
-    await _secureStorage.write(key: _kPassword, value: _password);
+    await _secureStorage.write(key: _kPasswordHash, value: _passwordHash);
+    await _secureStorage.write(key: _kPasswordSalt, value: _passwordSalt);
     await _storage.write(_kPhone, _phone);
     await _storage.write(_kCountry, _country);
     await _storage.write(_kBio, _bio);

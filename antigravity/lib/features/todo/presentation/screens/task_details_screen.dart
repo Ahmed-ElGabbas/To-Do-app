@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:tasko/core/constants/colors.dart';
-import 'package:tasko/core/constants/strings.dart';
 import 'package:tasko/core/constants/sizes.dart';
 import 'package:tasko/core/theme/text_styles.dart';
-import 'package:tasko/core/utils/helpers.dart';
 import 'package:tasko/core/localization/app_localizations.dart';
 import 'package:tasko/features/todo/domain/entities/task.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';

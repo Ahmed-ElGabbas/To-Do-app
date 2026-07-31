@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:tasko/core/constants/colors.dart';
 import 'package:tasko/core/constants/sizes.dart';
-import 'package:tasko/core/constants/strings.dart';
-import 'package:tasko/core/theme/text_styles.dart';
 import 'package:tasko/core/localization/app_localizations.dart';
 import 'package:tasko/features/todo/presentation/screens/home_screen.dart';
 import 'package:tasko/features/todo/presentation/screens/tasks_screen.dart';

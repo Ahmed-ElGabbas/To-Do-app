@@ -6,7 +6,7 @@ class UpdateTask {
 
   UpdateTask(this.repository);
 
-  Future<void> call(Task task) async {
-    return repository.updateTask(task);
+  Future<void> call(String email, Task task) async {
+    return repository.updateTask(email, task);
   }
 }

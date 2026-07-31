@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:tasko/core/theme/app_theme.dart';
+import 'package:tasko/features/todo/data/datasources/local_data_source.dart';
+import 'package:tasko/features/todo/data/repositories/task_repository_impl.dart';
+import 'package:tasko/features/todo/domain/repositories/task_repository.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
 import 'package:tasko/features/todo/presentation/state/settings_provider.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
@@ -27,11 +30,14 @@ void main() async {
   // Init notifications (best-effort)
   await NotificationService.init();
 
+  // Wire Clean Architecture dependencies
+  final localDataSource = LocalDataSource(LocalStorageService());
+  final taskRepository = TaskRepositoryImpl(localDataSource) as TaskRepository;
+
   runApp(
     MultiProvider(
       providers: [
-        // TaskProvider uses LocalStorageService() singleton — already init'd above
-        ChangeNotifierProvider(create: (_) => TaskProvider()..loadTasks()),
+        ChangeNotifierProvider(create: (_) => TaskProvider(taskRepository)..loadTasks()),
         ChangeNotifierProvider(create: (_) => AuthProvider()..loadUser()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()..loadSettings()),
       ],

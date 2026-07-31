@@ -251,7 +251,7 @@ class SideDrawer extends StatelessWidget {
         backgroundColor: theme.colorScheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd)),
         title: Text(l10n.get('delete_all'), style: AppTextStyles.heading3.copyWith(color: theme.colorScheme.onSurface)),
-        content: Text(l10n.get('delete_all'), style: AppTextStyles.bodyMedium.copyWith(color: theme.colorScheme.onSurface)),
+        content: Text(l10n.get('delete_all_confirm_message'), style: AppTextStyles.bodyMedium.copyWith(color: theme.colorScheme.onSurface)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
@@ -285,9 +285,9 @@ class SideDrawer extends StatelessWidget {
           children: [
             Text(l10n.get('follow_us'), style: AppTextStyles.heading3.copyWith(color: theme.colorScheme.onSurface)),
             const Divider(),
-            _buildSocialRow(ctx, icon: Icons.facebook_rounded, label: AppStrings.facebook, url: 'https://www.facebook.com/share/1BHmoqjc5b/'),
-            _buildSocialRow(ctx, icon: Icons.camera_alt_rounded, label: AppStrings.instagram, url: 'https://www.instagram.com/elg.abbas?igsh=NWlvYzliNjdsb3Nz'),
-            _buildSocialRow(ctx, icon: Icons.alternate_email_rounded, label: AppStrings.twitter, url: 'https://x.com/A7med_ElGabbas'),
+            _buildSocialRow(ctx, icon: Icons.facebook_rounded, label: AppStrings.facebook, url: AppStrings.facebookUrl),
+            _buildSocialRow(ctx, icon: Icons.camera_alt_rounded, label: AppStrings.instagram, url: AppStrings.instagramUrl),
+            _buildSocialRow(ctx, icon: Icons.alternate_email_rounded, label: AppStrings.twitter, url: AppStrings.twitterUrl),
           ],
         ),
       ),

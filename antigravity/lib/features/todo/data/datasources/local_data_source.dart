@@ -2,43 +2,36 @@ import 'package:tasko/features/todo/data/models/task_model.dart';
 import 'package:tasko/shared/services/local_storage_service.dart';
 
 class LocalDataSource {
-  static const String _tasksKey = 'tasks';
-
   final LocalStorageService _storageService;
 
   LocalDataSource(this._storageService);
 
-  Future<List<TaskModel>> getTasks() async {
-    final tasksString = _storageService.read(_tasksKey);
-    if (tasksString == null || tasksString.isEmpty) {
-      return [];
-    }
-    return TaskModel.decode(tasksString);
+  Future<List<TaskModel>> getTasks(String email) async {
+    return _storageService.loadTasksForUser(email);
   }
 
-  Future<void> saveTasks(List<TaskModel> tasks) async {
-    final encoded = TaskModel.encode(tasks);
-    await _storageService.write(_tasksKey, encoded);
+  Future<void> saveAllTasks(String email, List<TaskModel> tasks) async {
+    await _storageService.saveTasksForUser(email, tasks);
   }
 
-  Future<void> addTask(TaskModel task) async {
-    final tasks = await getTasks();
+  Future<void> addTask(String email, TaskModel task) async {
+    final tasks = await getTasks(email);
     tasks.add(task);
-    await saveTasks(tasks);
+    await saveAllTasks(email, tasks);
   }
 
-  Future<void> updateTask(TaskModel task) async {
-    final tasks = await getTasks();
+  Future<void> updateTask(String email, TaskModel task) async {
+    final tasks = await getTasks(email);
     final index = tasks.indexWhere((t) => t.id == task.id);
     if (index != -1) {
       tasks[index] = task;
-      await saveTasks(tasks);
+      await saveAllTasks(email, tasks);
     }
   }
 
-  Future<void> deleteTask(String id) async {
-    final tasks = await getTasks();
+  Future<void> deleteTask(String email, String id) async {
+    final tasks = await getTasks(email);
     tasks.removeWhere((t) => t.id == id);
-    await saveTasks(tasks);
+    await saveAllTasks(email, tasks);
   }
 }
