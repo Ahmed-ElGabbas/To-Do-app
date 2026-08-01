@@ -1,0 +1,37 @@
+import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { AppModule } from './app.module';
+import { LoggerService } from './common/logger/logger.service';
+
+async function bootstrap() {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+  });
+  const config = app.get(ConfigService);
+  const logger = new LoggerService();
+  logger.setContext('Bootstrap');
+  app.useLogger(logger);
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+
+  app.enableCors({
+    origin: config.get<string[]>('app.corsOrigin'),
+  });
+
+  const port = config.get<number>('app.port', 3000);
+  await app.listen(port);
+  logger.info('application_started', {
+    env: config.get('app.env'),
+    port,
+  });
+}
+
+void bootstrap();

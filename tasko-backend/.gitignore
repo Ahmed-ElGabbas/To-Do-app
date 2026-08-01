@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+
+# environment
+.env
+.env.local
+.env.production
+
+# logs
+logs/
+*.log
+npm-debug.log*
+
+# test output
+coverage/
+.nyc_output/
+
+# local file storage (dev/test uploads)
+storage/
+
+# local databases
+*.sqlite
+*.sqlite3
+*.db
+
+# editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
