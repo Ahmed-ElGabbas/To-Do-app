@@ -13,15 +13,33 @@ export abstract class TagRepository {
     name: string,
   ): Promise<TagEntity | null>;
 
+  /** Case-insensitive lookup used to enforce unique tag names per team. */
+  abstract findByNameForTeam(
+    teamId: string,
+    name: string,
+  ): Promise<TagEntity | null>;
+
   abstract listByUser(userId: string): Promise<TagEntity[]>;
 
-  /** Loads only tags owned by `userId`. Used to validate task tag references. */
+  abstract listByTeam(teamId: string): Promise<TagEntity[]>;
+
+  /** Loads only personal tags owned by `userId`. Used to validate task tag references. */
   abstract findByIdsForUser(
     userId: string,
     ids: string[],
   ): Promise<TagEntity[]>;
 
-  abstract create(data: { userId: string; name: string }): Promise<TagEntity>;
+  /** Loads only tags belonging to `teamId`. Used to validate team task tag references. */
+  abstract findByIdsForTeam(
+    teamId: string,
+    ids: string[],
+  ): Promise<TagEntity[]>;
+
+  abstract create(data: {
+    userId: string;
+    teamId: string | null;
+    name: string;
+  }): Promise<TagEntity>;
 
   abstract save(entity: TagEntity): Promise<TagEntity>;
 

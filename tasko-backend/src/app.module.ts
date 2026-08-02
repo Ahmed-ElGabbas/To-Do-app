@@ -7,6 +7,7 @@ import { LoggerService } from './common/logger/logger.service';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { TeamMembershipGuard } from './common/guards/team-membership.guard';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -24,10 +25,12 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CategoryModule } from './modules/category/category.module';
 import { FileModule } from './modules/file/file.module';
 import { HealthModule } from './modules/health/health.module';
+import { MemberModule } from './modules/member/member.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { TagModule } from './modules/tag/tag.module';
 import { TaskModule } from './modules/task/task.module';
+import { TeamModule } from './modules/team/team.module';
 import { UserModule } from './modules/user/user.module';
 
 @Module({
@@ -68,11 +71,14 @@ import { UserModule } from './modules/user/user.module';
     ActivityLogModule,
     NotificationModule,
     FileModule,
+    TeamModule,
+    MemberModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: TeamMembershipGuard },
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },

@@ -11,7 +11,7 @@ const TEAM_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 describe('MemberService', () => {
   const members = {
-    findMembership: jest.fn(),
+    findByTeamAndUser: jest.fn(),
     listByTeam: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
@@ -74,7 +74,7 @@ describe('MemberService', () => {
   describe('addMember', () => {
     it('adds a new member with the default viewer role', async () => {
       users.findByEmail.mockResolvedValue(user);
-      members.findMembership.mockResolvedValue(null);
+      members.findByTeamAndUser.mockResolvedValue(null);
       members.create.mockResolvedValue(membership);
 
       const result = await service.addMember(TEAM_ID, {
@@ -100,7 +100,7 @@ describe('MemberService', () => {
 
     it('rejects adding an existing member', async () => {
       users.findByEmail.mockResolvedValue(user);
-      members.findMembership.mockResolvedValue(membership);
+      members.findByTeamAndUser.mockResolvedValue(membership);
       await expect(
         service.addMember(TEAM_ID, { email: 'member@example.com' }),
       ).rejects.toMatchObject({ code: 'CONFLICT' });
@@ -110,7 +110,7 @@ describe('MemberService', () => {
 
   describe('changeRole', () => {
     it('changes the role of a non-owner member', async () => {
-      members.findMembership.mockResolvedValue(membership);
+      members.findByTeamAndUser.mockResolvedValue(membership);
       teams.findById.mockResolvedValue({ id: TEAM_ID, ownerId: OWNER });
       members.save.mockResolvedValue({ ...membership, role: TeamRole.EDITOR });
       users.findById.mockResolvedValue(user);
@@ -122,8 +122,12 @@ describe('MemberService', () => {
     });
 
     it('rejects demoting the team owner', async () => {
-      const ownerMembership = { ...membership, userId: OWNER, role: TeamRole.OWNER };
-      members.findMembership.mockResolvedValue(ownerMembership);
+      const ownerMembership = {
+        ...membership,
+        userId: OWNER,
+        role: TeamRole.OWNER,
+      };
+      members.findByTeamAndUser.mockResolvedValue(ownerMembership);
       teams.findById.mockResolvedValue({ id: TEAM_ID, ownerId: OWNER });
 
       await expect(
@@ -133,7 +137,7 @@ describe('MemberService', () => {
     });
 
     it('rejects a missing membership', async () => {
-      members.findMembership.mockResolvedValue(null);
+      members.findByTeamAndUser.mockResolvedValue(null);
       await expect(
         service.changeRole(TEAM_ID, MEMBER, { role: TeamRole.EDITOR }),
       ).rejects.toMatchObject({ code: 'RESOURCE_NOT_FOUND' });
@@ -142,15 +146,19 @@ describe('MemberService', () => {
 
   describe('removeMember', () => {
     it('removes a non-owner member', async () => {
-      members.findMembership.mockResolvedValue(membership);
+      members.findByTeamAndUser.mockResolvedValue(membership);
       teams.findById.mockResolvedValue({ id: TEAM_ID, ownerId: OWNER });
       await service.removeMember(TEAM_ID, MEMBER);
       expect(members.remove).toHaveBeenCalledWith(membership.id);
     });
 
     it('rejects removing the team owner', async () => {
-      const ownerMembership = { ...membership, userId: OWNER, role: TeamRole.OWNER };
-      members.findMembership.mockResolvedValue(ownerMembership);
+      const ownerMembership = {
+        ...membership,
+        userId: OWNER,
+        role: TeamRole.OWNER,
+      };
+      members.findByTeamAndUser.mockResolvedValue(ownerMembership);
       teams.findById.mockResolvedValue({ id: TEAM_ID, ownerId: OWNER });
       await expect(service.removeMember(TEAM_ID, OWNER)).rejects.toMatchObject({
         code: 'FORBIDDEN',

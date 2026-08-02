@@ -6,11 +6,8 @@ import {
   ForbiddenActionError,
   UnauthorizedError,
 } from '../errors/domain-error';
-import {
-  TeamContext,
-  TeamMembershipContext,
-} from '../types/team-context';
-import type { MemberRepository } from '../../modules/member/interfaces/member-repository';
+import { TeamContext, TeamMembershipContext } from '../types/team-context';
+import { MemberRepository } from '../../modules/member/interfaces/member-repository';
 
 const ROLE_RANK: Record<TeamRole, number> = {
   [TeamRole.VIEWER]: 0,
@@ -23,7 +20,9 @@ const ROLE_RANK: Record<TeamRole, number> = {
  * are checked; everything else passes through untouched (mirrors how the
  * global JwtAuthGuard / RolesGuard skip unannotated routes).
  *
- * For a checked route it:
+ * Roles are hierarchical and `@RequireTeamRole(...roles)` is a union: the
+ * caller passes if they hold ANY listed role (or a higher one). For a checked
+ * route the guard:
  *  1. resolves the team id from the `:teamId` path parameter,
  *  2. loads the caller's membership (403 if they are not a member),
  *  3. enforces the required team role (403 if the role is too low),
@@ -63,7 +62,7 @@ export class TeamMembershipGuard implements CanActivate {
 
     if (requiredRoles.length > 0) {
       const rank = ROLE_RANK[membership.role];
-      const minRequiredRank = Math.max(
+      const minRequiredRank = Math.min(
         ...requiredRoles.map((role) => ROLE_RANK[role]),
       );
       if (rank < minRequiredRank) {

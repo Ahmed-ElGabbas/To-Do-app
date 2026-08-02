@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { CategoryEntity } from '../entities/category.entity';
 import { CategoryRepository } from '../interfaces/category-repository';
 
@@ -24,18 +24,41 @@ export class TypeOrmCategoryRepository extends CategoryRepository {
     return this.repo
       .createQueryBuilder('category')
       .where('category.userId = :userId', { userId })
+      .andWhere('category.teamId IS NULL')
+      .andWhere('LOWER(category.name) = LOWER(:name)', { name })
+      .getOne();
+  }
+
+  findByNameForTeam(
+    teamId: string,
+    name: string,
+  ): Promise<CategoryEntity | null> {
+    return this.repo
+      .createQueryBuilder('category')
+      .where('category.teamId = :teamId', { teamId })
       .andWhere('LOWER(category.name) = LOWER(:name)', { name })
       .getOne();
   }
 
   listByUser(userId: string): Promise<CategoryEntity[]> {
     return this.repo.find({
-      where: { userId },
+      where: { userId, teamId: IsNull() },
       order: { name: 'ASC' },
     });
   }
 
-  create(data: { userId: string; name: string }): Promise<CategoryEntity> {
+  listByTeam(teamId: string): Promise<CategoryEntity[]> {
+    return this.repo.find({
+      where: { teamId },
+      order: { name: 'ASC' },
+    });
+  }
+
+  create(data: {
+    userId: string;
+    teamId: string | null;
+    name: string;
+  }): Promise<CategoryEntity> {
     return this.repo.save(this.repo.create(data));
   }
 

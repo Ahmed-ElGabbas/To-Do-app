@@ -64,11 +64,11 @@ export class TypeOrmTeamRepository extends TeamRepository {
       )
       .addSelect('membership.role', 'role')
       .orderBy('team.name', 'ASC')
-      .getRawAndEntities<TeamEntity>()
+      .getRawAndEntities<{ role: TeamRole }>()
       .then(({ entities, raw }) =>
         entities.map((team, index) => ({
           team,
-          role: raw[index]?.role as TeamRole,
+          role: raw[index]?.role ?? TeamRole.VIEWER,
         })),
       );
   }

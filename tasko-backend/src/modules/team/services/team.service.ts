@@ -4,10 +4,7 @@ import { TeamEntity } from '../entities/team.entity';
 import { TeamRepository } from '../interfaces/team-repository';
 import { CreateTeamDto } from '../dto/create-team.dto';
 import { UpdateTeamDto } from '../dto/update-team.dto';
-import {
-  TeamOutput,
-  TeamWithRoleOutput,
-} from '../dto/team.output';
+import { TeamOutput, TeamWithRoleOutput } from '../dto/team.output';
 
 @Injectable()
 export class TeamService {
@@ -23,7 +20,7 @@ export class TeamService {
   }
 
   async list(userId: string): Promise<TeamWithRoleOutput[]> {
-    const rows = await this.teams.listForUserWithRole(userId);
+    const rows = await this.teams.listForMember(userId);
     return rows.map((row) => ({
       ...this.toOutput(row.team),
       role: row.role,
@@ -34,10 +31,7 @@ export class TeamService {
     return this.toOutput(await this.getTeam(teamId));
   }
 
-  async update(
-    teamId: string,
-    dto: UpdateTeamDto,
-  ): Promise<TeamOutput> {
+  async update(teamId: string, dto: UpdateTeamDto): Promise<TeamOutput> {
     const team = await this.getTeam(teamId);
     if (dto.name !== undefined) {
       team.name = dto.name.trim();

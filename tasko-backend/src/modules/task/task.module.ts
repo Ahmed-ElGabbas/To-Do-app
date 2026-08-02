@@ -4,6 +4,7 @@ import { TaskEventsModule } from '../../infrastructure/events/task-events.module
 import { CategoryModule } from '../category/category.module';
 import { TagModule } from '../tag/tag.module';
 import { TaskController } from './controllers/task.controller';
+import { TeamTaskController } from './controllers/team-task.controller';
 import { TaskEntity } from './entities/task.entity';
 import { TaskRepository } from './interfaces/task-repository';
 import { TypeOrmTaskRepository } from './repositories/typeorm-task.repository';
@@ -17,7 +18,7 @@ import { TaskService } from './services/task.service';
     TagModule,
     TaskEventsModule,
   ],
-  controllers: [TaskController],
+  controllers: [TaskController, TeamTaskController],
   providers: [
     TaskService,
     TaskQueryService,

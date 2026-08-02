@@ -9,7 +9,7 @@ const TEAM_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 describe('TeamService', () => {
   const repo = {
     findById: jest.fn(),
-    listForUserWithRole: jest.fn(),
+    listForMember: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
     remove: jest.fn(),
@@ -64,9 +64,7 @@ describe('TeamService', () => {
 
   describe('list', () => {
     it('returns teams with the caller role', async () => {
-      repo.listForUserWithRole.mockResolvedValue([
-        { team, role: TeamRole.OWNER },
-      ]);
+      repo.listForMember.mockResolvedValue([{ team, role: TeamRole.OWNER }]);
       const result = await service.list(OWNER);
       expect(result).toEqual([
         expect.objectContaining({ id: TEAM_ID, role: TeamRole.OWNER }),

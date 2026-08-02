@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { TagEntity } from '../entities/tag.entity';
 import { TagRepository } from '../interfaces/tag-repository';
 
@@ -21,19 +21,45 @@ export class TypeOrmTagRepository extends TagRepository {
     return this.repo
       .createQueryBuilder('tag')
       .where('tag.userId = :userId', { userId })
+      .andWhere('tag.teamId IS NULL')
+      .andWhere('LOWER(tag.name) = LOWER(:name)', { name })
+      .getOne();
+  }
+
+  findByNameForTeam(teamId: string, name: string): Promise<TagEntity | null> {
+    return this.repo
+      .createQueryBuilder('tag')
+      .where('tag.teamId = :teamId', { teamId })
       .andWhere('LOWER(tag.name) = LOWER(:name)', { name })
       .getOne();
   }
 
   listByUser(userId: string): Promise<TagEntity[]> {
-    return this.repo.find({ where: { userId }, order: { name: 'ASC' } });
+    return this.repo.find({
+      where: { userId, teamId: IsNull() },
+      order: { name: 'ASC' },
+    });
+  }
+
+  listByTeam(teamId: string): Promise<TagEntity[]> {
+    return this.repo.find({ where: { teamId }, order: { name: 'ASC' } });
   }
 
   findByIdsForUser(userId: string, ids: string[]): Promise<TagEntity[]> {
-    return this.repo.find({ where: { id: In(ids), userId } });
+    return this.repo.find({
+      where: { id: In(ids), userId, teamId: IsNull() },
+    });
   }
 
-  create(data: { userId: string; name: string }): Promise<TagEntity> {
+  findByIdsForTeam(teamId: string, ids: string[]): Promise<TagEntity[]> {
+    return this.repo.find({ where: { id: In(ids), teamId } });
+  }
+
+  create(data: {
+    userId: string;
+    teamId: string | null;
+    name: string;
+  }): Promise<TagEntity> {
     return this.repo.save(this.repo.create(data));
   }
 

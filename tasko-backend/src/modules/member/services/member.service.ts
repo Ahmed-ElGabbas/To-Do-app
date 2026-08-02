@@ -29,15 +29,12 @@ export class MemberService {
     return rows.map((row, index) => this.toOutput(row, users[index]));
   }
 
-  async addMember(
-    teamId: string,
-    dto: AddMemberDto,
-  ): Promise<MemberOutput> {
+  async addMember(teamId: string, dto: AddMemberDto): Promise<MemberOutput> {
     const user = await this.users.findByEmail(dto.email.toLowerCase());
     if (!user) {
       throw new ResourceNotFoundError('User not found');
     }
-    const existing = await this.members.findMembership(teamId, user.id);
+    const existing = await this.members.findByTeamAndUser(teamId, user.id);
     if (existing) {
       throw new ConflictError('This user is already a member of this team');
     }
@@ -77,7 +74,7 @@ export class MemberService {
     teamId: string,
     userId: string,
   ): Promise<TeamMemberEntity> {
-    const member = await this.members.findMembership(teamId, userId);
+    const member = await this.members.findByTeamAndUser(teamId, userId);
     if (!member) {
       throw new ResourceNotFoundError('Membership not found');
     }

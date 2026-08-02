@@ -3,10 +3,13 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { TeamRole } from '../../../common/constants/team-role.enum';
+import { TeamEntity } from '../../team/entities/team.entity';
 
 /**
  * A user's membership in a team. One row per (team, user); the owner holds the
@@ -22,6 +25,10 @@ export class TeamMemberEntity {
   @Index()
   @Column({ name: 'team_id', type: 'uuid' })
   teamId: string;
+
+  @ManyToOne(() => TeamEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'team_id' })
+  team: TeamEntity;
 
   @Index()
   @Column({ name: 'user_id', type: 'uuid' })

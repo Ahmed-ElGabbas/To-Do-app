@@ -829,6 +829,266 @@ describe('Tasko API (e2e)', () => {
     });
   });
 
+  describe('teams and multi-tenancy', () => {
+    it('creates, lists, updates, and deletes a team', async () => {
+      const token = await signUp('team-lifecycle@example.com');
+
+      const created = await request(app.getHttpServer())
+        .post('/teams')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Sprint Squad', description: 'Build fast' })
+        .expect(201);
+      expect(created.body.data.name).toBe('Sprint Squad');
+      const teamId = created.body.data.id;
+      expect(created.body.data.ownerId).toBeTruthy();
+
+      const list = await request(app.getHttpServer())
+        .get('/teams')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(list.body.data).toHaveLength(1);
+      expect(list.body.data[0].id).toBe(teamId);
+      expect(list.body.data[0].role).toBe('owner');
+
+      const got = await request(app.getHttpServer())
+        .get(`/teams/${teamId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(got.body.data.description).toBe('Build fast');
+
+      const updated = await request(app.getHttpServer())
+        .patch(`/teams/${teamId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Sprint Squad v2', description: '  ' })
+        .expect(200);
+      expect(updated.body.data.name).toBe('Sprint Squad v2');
+      expect(updated.body.data.description).toBeNull();
+
+      await request(app.getHttpServer())
+        .delete(`/teams/${teamId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      const gone = await request(app.getHttpServer())
+        .get(`/teams/${teamId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(403);
+      expect(gone.body.error.code).toBe('FORBIDDEN');
+    });
+
+    it('adds members by email and enforces the team role hierarchy', async () => {
+      const ownerToken = await signUp('team-owner@example.com');
+      const editorToken = await signUp('team-editor@example.com');
+      const viewerToken = await signUp('team-viewer@example.com');
+      const outsiderToken = await signUp('team-outsider@example.com');
+
+      const team = await request(app.getHttpServer())
+        .post('/teams')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ name: 'Gated' })
+        .expect(201);
+      const teamId = team.body.data.id;
+      const ownerId = team.body.data.ownerId;
+
+      await request(app.getHttpServer())
+        .get(`/teams/${teamId}`)
+        .set('Authorization', `Bearer ${outsiderToken}`)
+        .expect(403);
+
+      await request(app.getHttpServer())
+        .post(`/teams/${teamId}/members`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ email: 'team-editor@example.com', role: 'editor' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/teams/${teamId}/members`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ email: 'team-viewer@example.com' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/teams/${teamId}/members`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ email: 'team-viewer@example.com' })
+        .expect(409);
+
+      await request(app.getHttpServer())
+        .post(`/teams/${teamId}/members`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ email: 'ghost@example.com' })
+        .expect(404);
+
+      const members = await request(app.getHttpServer())
+        .get(`/teams/${teamId}/members`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200);
+      expect(members.body.data).toHaveLength(3);
+      const editorId = members.body.data.find(
+        (m: { user: { email: string } }) =>
+          m.user.email === 'team-editor@example.com',
+      ).userId;
+
+      await request(app.getHttpServer())
+        .post(`/teams/${teamId}/members`)
+        .set('Authorization', `Bearer ${editorToken}`)
+        .send({ email: 'team-outsider@example.com' })
+        .expect(403);
+
+      await request(app.getHttpServer())
+        .get(`/teams/${teamId}`)
+        .set('Authorization', `Bearer ${viewerToken}`)
+        .expect(200);
+      await request(app.getHttpServer())
+        .post(`/teams/${teamId}/tasks`)
+        .set('Authorization', `Bearer ${viewerToken}`)
+        .send({ title: 'Nope', time: '09:00 AM', date: 'today' })
+        .expect(403);
+
+      const task = await request(app.getHttpServer())
+        .post(`/teams/${teamId}/tasks`)
+        .set('Authorization', `Bearer ${editorToken}`)
+        .send({ title: 'Ship it', time: '10:00 AM', date: 'today' })
+        .expect(201);
+      expect(task.body.data.teamId).toBe(teamId);
+
+      await request(app.getHttpServer())
+        .patch(`/teams/${teamId}/members/${editorId}`)
+        .set('Authorization', `Bearer ${editorToken}`)
+        .send({ role: 'viewer' })
+        .expect(403);
+
+      await request(app.getHttpServer())
+        .patch(`/teams/${teamId}/members/${ownerId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ role: 'viewer' })
+        .expect(403);
+      await request(app.getHttpServer())
+        .delete(`/teams/${teamId}/members/${ownerId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(403);
+
+      const demoted = await request(app.getHttpServer())
+        .patch(`/teams/${teamId}/members/${editorId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ role: 'viewer' })
+        .expect(200);
+      expect(demoted.body.data.role).toBe('viewer');
+
+      await request(app.getHttpServer())
+        .post(`/teams/${teamId}/tasks`)
+        .set('Authorization', `Bearer ${editorToken}`)
+        .send({ title: 'Blocked', time: '11:00 AM', date: 'today' })
+        .expect(403);
+
+      await request(app.getHttpServer())
+        .delete(`/teams/${teamId}/members/${editorId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .get(`/teams/${teamId}`)
+        .set('Authorization', `Bearer ${editorToken}`)
+        .expect(403);
+    });
+
+    it('scopes categories, tags, and tasks to the team', async () => {
+      const token = await signUp('team-scope@example.com');
+
+      const teamA = await request(app.getHttpServer())
+        .post('/teams')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Alpha' })
+        .expect(201);
+      const teamB = await request(app.getHttpServer())
+        .post('/teams')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Beta' })
+        .expect(201);
+      const teamAId = teamA.body.data.id;
+      const teamBId = teamB.body.data.id;
+
+      const catA = await request(app.getHttpServer())
+        .post(`/teams/${teamAId}/categories`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Design' })
+        .expect(201);
+      expect(catA.body.data.teamId).toBe(teamAId);
+      await request(app.getHttpServer())
+        .post(`/teams/${teamBId}/categories`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Design' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post('/categories')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Design' })
+        .expect(201);
+
+      const personalCats = await request(app.getHttpServer())
+        .get('/categories')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(personalCats.body.data).toHaveLength(1);
+
+      const teamCats = await request(app.getHttpServer())
+        .get(`/teams/${teamAId}/categories`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(teamCats.body.data).toHaveLength(1);
+      expect(teamCats.body.data[0].teamId).toBe(teamAId);
+
+      const tagA = await request(app.getHttpServer())
+        .post(`/teams/${teamAId}/tags`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Urgent' })
+        .expect(201);
+
+      const task = await request(app.getHttpServer())
+        .post(`/teams/${teamAId}/tasks`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: 'Design sprint',
+          time: '09:00 AM',
+          date: 'today',
+          categoryId: catA.body.data.id,
+          tagIds: [tagA.body.data.id],
+        })
+        .expect(201);
+      expect(task.body.data.teamId).toBe(teamAId);
+      expect(task.body.data.categoryId).toBe(catA.body.data.id);
+      expect(task.body.data.tagIds).toEqual([tagA.body.data.id]);
+      const taskId = task.body.data.id;
+
+      const personalTasks = await request(app.getHttpServer())
+        .get('/tasks')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(personalTasks.body.data.total).toBe(0);
+
+      const teamBTasks = await request(app.getHttpServer())
+        .get(`/teams/${teamBId}/tasks`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(teamBTasks.body.data.total).toBe(0);
+
+      await request(app.getHttpServer())
+        .get(`/teams/${teamBId}/tasks/${taskId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+
+      await request(app.getHttpServer())
+        .post(`/teams/${teamBId}/tasks`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: 'Sneaky',
+          time: '12:00 PM',
+          date: 'today',
+          categoryId: catA.body.data.id,
+        })
+        .expect(404);
+    });
+  });
+
   describe('avatar files', () => {
     const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 

@@ -5,6 +5,8 @@ import { TaskQueryService } from './task-query.service';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
+const TEAM = '99999999-9999-4999-8999-999999999999';
+const OTHER_TEAM = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 describe('TaskQueryService', () => {
   const tasks = {
@@ -32,6 +34,7 @@ describe('TaskQueryService', () => {
   const task = {
     id: '66666666-6666-4666-8666-666666666666',
     userId: OWNER,
+    teamId: null,
     title: 'Buy milk',
     time: '06:30 AM',
     date: 'today',
@@ -93,9 +96,50 @@ describe('TaskQueryService', () => {
       });
     });
 
+    it('hides a team task from a personal get', async () => {
+      tasks.findByIdWithTags.mockResolvedValue({ ...task, teamId: TEAM });
+      await expect(service.get(OWNER, task.id)).rejects.toMatchObject({
+        code: 'RESOURCE_NOT_FOUND',
+      });
+    });
+
     it('returns not found for a missing task', async () => {
       tasks.findByIdWithTags.mockResolvedValue(null);
       await expect(service.get(OWNER, task.id)).rejects.toMatchObject({
+        code: 'RESOURCE_NOT_FOUND',
+      });
+    });
+  });
+
+  describe('team-scoped reads', () => {
+    const teamTask = { ...task, teamId: TEAM };
+
+    it('lists every task in a team', async () => {
+      tasks.listAndCount.mockResolvedValue([[teamTask], 1]);
+      const result = await service.listForTeam(TEAM, { page: 1, limit: 20 });
+      expect(tasks.listAndCount.mock.calls[0][0].teamId).toBe(TEAM);
+      expect(result.total).toBe(1);
+      expect(result.items[0].teamId).toBe(TEAM);
+    });
+
+    it('gets a team task within the team', async () => {
+      tasks.findByIdWithTags.mockResolvedValue(teamTask);
+      await expect(service.getTeam(TEAM, task.id)).resolves.toMatchObject({
+        title: 'Buy milk',
+        teamId: TEAM,
+      });
+    });
+
+    it('hides a personal task from a team get', async () => {
+      tasks.findByIdWithTags.mockResolvedValue(task);
+      await expect(service.getTeam(TEAM, task.id)).rejects.toMatchObject({
+        code: 'RESOURCE_NOT_FOUND',
+      });
+    });
+
+    it('hides a task from another team as not found', async () => {
+      tasks.findByIdWithTags.mockResolvedValue(teamTask);
+      await expect(service.getTeam(OTHER_TEAM, task.id)).rejects.toMatchObject({
         code: 'RESOURCE_NOT_FOUND',
       });
     });

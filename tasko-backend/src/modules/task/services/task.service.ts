@@ -101,7 +101,11 @@ export class TaskService {
     await this.removeTask({ userId }, task);
   }
 
-  async removeInTeam(teamId: string, userId: string, id: string): Promise<void> {
+  async removeInTeam(
+    teamId: string,
+    userId: string,
+    id: string,
+  ): Promise<void> {
     const task = await this.taskQuery.getTeamTask(teamId, id);
     await this.removeTask({ userId, teamId }, task);
   }
@@ -191,10 +195,7 @@ export class TaskService {
     return toTaskOutput(saved);
   }
 
-  private async removeTask(
-    scope: TaskScope,
-    task: TaskEntity,
-  ): Promise<void> {
+  private async removeTask(scope: TaskScope, task: TaskEntity): Promise<void> {
     await this.tasks.remove(task.id);
     await this.emit(TaskEventType.TASK_DELETED, scope.userId, task);
   }

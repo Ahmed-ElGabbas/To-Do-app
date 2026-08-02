@@ -403,7 +403,12 @@ describe('TaskService', () => {
     it('toggles and removes a team task', async () => {
       taskQuery.getTeamTask.mockResolvedValue({ ...teamTask });
       tasks.save.mockResolvedValue({ ...teamTask, isDone: true });
-      const toggled = await service.toggleDoneInTeam(TEAM, OWNER, teamTask.id, true);
+      const toggled = await service.toggleDoneInTeam(
+        TEAM,
+        OWNER,
+        teamTask.id,
+        true,
+      );
       expect(toggled.isDone).toBe(true);
 
       taskQuery.getTeamTask.mockResolvedValue({ ...teamTask });

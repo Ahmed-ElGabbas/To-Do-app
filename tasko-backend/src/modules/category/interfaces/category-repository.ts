@@ -9,10 +9,18 @@ export abstract class CategoryRepository {
     name: string,
   ): Promise<CategoryEntity | null>;
 
+  abstract findByNameForTeam(
+    teamId: string,
+    name: string,
+  ): Promise<CategoryEntity | null>;
+
   abstract listByUser(userId: string): Promise<CategoryEntity[]>;
+
+  abstract listByTeam(teamId: string): Promise<CategoryEntity[]>;
 
   abstract create(data: {
     userId: string;
+    teamId: string | null;
     name: string;
   }): Promise<CategoryEntity>;
 
