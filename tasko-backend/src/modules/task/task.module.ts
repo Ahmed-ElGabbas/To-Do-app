@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TaskEventsModule } from '../../infrastructure/events/task-events.module';
 import { CategoryModule } from '../category/category.module';
+import { MemberModule } from '../member/member.module';
 import { TagModule } from '../tag/tag.module';
 import { TaskController } from './controllers/task.controller';
 import { TeamTaskController } from './controllers/team-task.controller';
@@ -16,6 +17,7 @@ import { TaskService } from './services/task.service';
     TypeOrmModule.forFeature([TaskEntity]),
     CategoryModule,
     TagModule,
+    MemberModule,
     TaskEventsModule,
   ],
   controllers: [TaskController, TeamTaskController],
@@ -24,5 +26,6 @@ import { TaskService } from './services/task.service';
     TaskQueryService,
     { provide: TaskRepository, useClass: TypeOrmTaskRepository },
   ],
+  exports: [TaskRepository],
 })
 export class TaskModule {}

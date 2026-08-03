@@ -22,4 +22,23 @@ export abstract class TeamRepository {
   abstract listForMember(
     userId: string,
   ): Promise<Array<{ team: TeamEntity; role: TeamRole }>>;
+
+  /**
+   * Searches the name/description of teams the user belongs to. An optional
+   * `teamId` restricts the match to a single team (already membership-checked).
+   */
+  abstract searchForMember(
+    userId: string,
+    q: string,
+    options: { teamId?: string; page: number; limit: number },
+  ): Promise<[TeamEntity[], number]>;
+
+  /** Admin: paginated list of every team, optionally filtered by name. */
+  abstract listAllForAdmin(
+    q: string | undefined,
+    page: number,
+    limit: number,
+  ): Promise<[TeamEntity[], number]>;
+
+  abstract countAll(): Promise<number>;
 }

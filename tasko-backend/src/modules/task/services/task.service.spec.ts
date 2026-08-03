@@ -3,6 +3,7 @@ import { TaskPriority } from '../../../common/constants/task-priority.enum';
 import { TaskEventType } from '../../../infrastructure/events/task-event';
 import { TaskEventBus } from '../../../infrastructure/events/task-event-bus.service';
 import { CategoryRepository } from '../../category/interfaces/category-repository';
+import { MemberRepository } from '../../member/interfaces/member-repository';
 import { TagRepository } from '../../tag/interfaces/tag-repository';
 import { TaskRepository } from '../interfaces/task-repository';
 import { TaskQueryService } from './task-query.service';
@@ -49,11 +50,15 @@ describe('TaskService', () => {
   const eventBus = {
     publish: jest.fn(),
   };
+  const members = {
+    listByTeam: jest.fn(),
+  };
 
   let service: TaskService;
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    members.listByTeam.mockResolvedValue([]);
     const moduleRef = await Test.createTestingModule({
       providers: [
         TaskService,
@@ -62,6 +67,7 @@ describe('TaskService', () => {
         { provide: TagRepository, useValue: tags },
         { provide: TaskQueryService, useValue: taskQuery },
         { provide: TaskEventBus, useValue: eventBus },
+        { provide: MemberRepository, useValue: members },
       ],
     }).compile();
     service = moduleRef.get(TaskService);
@@ -107,6 +113,7 @@ describe('TaskService', () => {
         notes: null,
         categoryId: null,
         tags: [],
+        completedAt: null,
       });
       expect(result.id).toBe(baseTask.id);
     });
@@ -339,8 +346,38 @@ describe('TaskService', () => {
         notes: null,
         categoryId: null,
         tags: [],
+        completedAt: null,
       });
       expect(result.teamId).toBe(TEAM);
+    });
+
+    it('notifies the other team members that a task was assigned', async () => {
+      members.listByTeam.mockResolvedValue([
+        { userId: OWNER },
+        { userId: OTHER },
+      ]);
+      tasks.create.mockResolvedValue(teamTask);
+
+      await service.createInTeam(TEAM, OWNER, {
+        title: 'Standup notes',
+        time: '09:00 AM',
+        date: 'today',
+      });
+
+      expect(members.listByTeam).toHaveBeenCalledWith(TEAM);
+      expect(eventBus.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: TaskEventType.TASK_ASSIGNED,
+          userId: OTHER,
+          taskId: teamTask.id,
+        }),
+      );
+      expect(eventBus.publish).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: TaskEventType.TASK_ASSIGNED,
+          userId: OWNER,
+        }),
+      );
     });
 
     it('requires team categories and team tags when creating in a team', async () => {

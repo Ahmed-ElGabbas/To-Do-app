@@ -55,6 +55,10 @@ export class TaskEntity {
   @Column({ name: 'is_done', default: false })
   isDone: boolean;
 
+  /** When the task was last marked done (NULL while pending/reopened). */
+  @Column({ name: 'completed_at', type: 'datetime', nullable: true })
+  completedAt: Date | null;
+
   @Column({ type: 'varchar', length: 20, default: TaskPriority.MEDIUM })
   priority: TaskPriority;
 

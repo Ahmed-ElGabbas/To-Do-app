@@ -12,6 +12,7 @@ import {
 import { TaskEventBus } from '../../../infrastructure/events/task-event-bus.service';
 import { CategoryEntity } from '../../category/entities/category.entity';
 import { CategoryRepository } from '../../category/interfaces/category-repository';
+import { MemberRepository } from '../../member/interfaces/member-repository';
 import { TagEntity } from '../../tag/entities/tag.entity';
 import { TagRepository } from '../../tag/interfaces/tag-repository';
 import { CreateTaskDto } from '../dto/create-task.dto';
@@ -42,6 +43,7 @@ export class TaskService {
     private readonly tags: TagRepository,
     private readonly taskQuery: TaskQueryService,
     private readonly eventBus: TaskEventBus,
+    private readonly members: MemberRepository,
   ) {}
 
   async create(userId: string, dto: CreateTaskDto): Promise<TaskOutput> {
@@ -134,8 +136,12 @@ export class TaskService {
       notes: dto.notes?.trim() || null,
       categoryId: category?.id ?? null,
       tags: tagEntities,
+      completedAt: dto.isDone ? new Date() : null,
     });
     await this.emit(TaskEventType.TASK_CREATED, scope.userId, task);
+    if (scope.teamId) {
+      await this.emitAssigned(scope.teamId, scope.userId, task);
+    }
     return toTaskOutput(task);
   }
 
@@ -156,6 +162,7 @@ export class TaskService {
     }
     if (dto.isDone !== undefined) {
       task.isDone = dto.isDone;
+      task.completedAt = dto.isDone ? (task.completedAt ?? new Date()) : null;
     }
     if (dto.priority !== undefined) {
       task.priority = dto.priority;
@@ -186,6 +193,7 @@ export class TaskService {
     isDone: boolean,
   ): Promise<TaskOutput> {
     task.isDone = isDone;
+    task.completedAt = isDone ? (task.completedAt ?? new Date()) : null;
     const saved = await this.tasks.save(task);
     await this.emit(
       isDone ? TaskEventType.TASK_COMPLETED : TaskEventType.TASK_REOPENED,
@@ -215,6 +223,24 @@ export class TaskService {
       data: { title: task.title },
     };
     await this.eventBus.publish(event);
+  }
+
+  /**
+   * Notifies every other team member that a team task was created. One event
+   * per recipient keeps the unique `eventId` de-duplication intact downstream.
+   */
+  private async emitAssigned(
+    teamId: string,
+    creatorId: string,
+    task: Pick<TaskEntity, 'id' | 'title'>,
+  ): Promise<void> {
+    const rows = await this.members.listByTeam(teamId);
+    const recipients = rows
+      .map((row) => row.userId)
+      .filter((userId) => userId !== creatorId);
+    for (const recipient of recipients) {
+      await this.emit(TaskEventType.TASK_ASSIGNED, recipient, task);
+    }
   }
 
   /**

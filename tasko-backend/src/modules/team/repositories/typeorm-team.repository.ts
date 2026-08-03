@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { TeamRole } from '../../../common/constants/team-role.enum';
 import { TeamEntity } from '../entities/team.entity';
 import { TeamMemberEntity } from '../../member/entities/team-member.entity';
@@ -71,5 +71,78 @@ export class TypeOrmTeamRepository extends TeamRepository {
           role: raw[index]?.role ?? TeamRole.VIEWER,
         })),
       );
+  }
+
+  /**
+   * Searches team name/description for a member. The membership join already
+   * scopes results to teams the user can see; an optional `teamId` narrows to
+   * a single team (whose membership the caller already validated).
+   */
+  async searchForMember(
+    userId: string,
+    q: string,
+    options: { teamId?: string; page: number; limit: number },
+  ): Promise<[TeamEntity[], number]> {
+    const build = (): SelectQueryBuilder<TeamEntity> => {
+      const qb = this.repo
+        .createQueryBuilder('team')
+        .innerJoin(
+          TeamMemberEntity,
+          'membership',
+          'membership.teamId = team.id AND membership.userId = :userId',
+          { userId },
+        );
+      if (options.teamId) {
+        qb.andWhere('team.id = :teamId', { teamId: options.teamId });
+      }
+      return qb.andWhere(
+        '(LOWER(team.name) LIKE LOWER(:q) OR LOWER(team.description) LIKE LOWER(:q))',
+        { q: `%${q}%` },
+      );
+    };
+
+    const total = (await build().select('team.id').distinct(true).getRawMany())
+      .length;
+
+    const items = await build()
+      .orderBy('team.name', 'ASC')
+      .skip((options.page - 1) * options.limit)
+      .take(options.limit)
+      .getMany();
+
+    return [items, total];
+  }
+
+  /**
+   * Admin: paginates every team on the platform, optionally matching the
+   * name/description. Not scoped to any membership.
+   */
+  async listAllForAdmin(
+    q: string | undefined,
+    page: number,
+    limit: number,
+  ): Promise<[TeamEntity[], number]> {
+    const build = (): SelectQueryBuilder<TeamEntity> => {
+      const qb = this.repo.createQueryBuilder('team');
+      if (q) {
+        qb.where(
+          '(LOWER(team.name) LIKE LOWER(:q) OR LOWER(team.description) LIKE LOWER(:q))',
+          { q: `%${q}%` },
+        );
+      }
+      return qb;
+    };
+
+    const total = await build().getCount();
+    const items = await build()
+      .orderBy('team.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+    return [items, total];
+  }
+
+  countAll(): Promise<number> {
+    return this.repo.count();
   }
 }

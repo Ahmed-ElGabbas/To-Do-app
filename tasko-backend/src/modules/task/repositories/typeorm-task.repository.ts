@@ -5,9 +5,12 @@ import { TaskPriority } from '../../../common/constants/task-priority.enum';
 import { TaskSortBy } from '../../../common/constants/task-sort-by.enum';
 import { TaskEntity } from '../entities/task.entity';
 import {
+  AnalyticsRow,
+  AnalyticsScope,
   CreateTaskData,
   TaskListOptions,
   TaskRepository,
+  TaskSearchOptions,
 } from '../interfaces/task-repository';
 
 @Injectable()
@@ -56,12 +59,81 @@ export class TypeOrmTaskRepository extends TaskRepository {
     return this.repo.save(this.repo.create(data));
   }
 
+  /**
+   * Matches title OR notes across the caller's personal tasks and every team
+   * they belong to. Empty `teamIds` narrows the search to personal tasks.
+   */
+  async search(options: TaskSearchOptions): Promise<[TaskEntity[], number]> {
+    const build = (): SelectQueryBuilder<TaskEntity> => {
+      const qb = this.repo.createQueryBuilder('task');
+      if (options.teamIds.length > 0) {
+        qb.where(
+          '((task.userId = :userId AND task.teamId IS NULL) OR task.teamId IN (:...teamIds))',
+          { userId: options.userId, teamIds: options.teamIds },
+        );
+      } else {
+        qb.where('task.userId = :userId AND task.teamId IS NULL', {
+          userId: options.userId,
+        });
+      }
+      return qb.andWhere(
+        '(LOWER(task.title) LIKE LOWER(:q) OR LOWER(task.notes) LIKE LOWER(:q))',
+        { q: `%${options.q}%` },
+      );
+    };
+
+    const total = (await build().select('task.id').distinct(true).getRawMany())
+      .length;
+
+    const items = await build()
+      .orderBy('task.createdAt', 'DESC')
+      .skip((options.page - 1) * options.limit)
+      .take(options.limit)
+      .getMany();
+
+    if (items.length > 0) {
+      await this.attachTags(items);
+    }
+    return [items, total];
+  }
+
+  async listForAnalytics(scope: AnalyticsScope): Promise<AnalyticsRow[]> {
+    const qb = this.repo
+      .createQueryBuilder('task')
+      .leftJoinAndSelect('task.category', 'category');
+    if (scope.teamId) {
+      qb.where('task.teamId = :teamId', { teamId: scope.teamId });
+    } else {
+      qb.where('task.userId = :userId AND task.teamId IS NULL', {
+        userId: scope.userId,
+      });
+    }
+    const rows = await qb.getMany();
+    return rows.map((task) => ({
+      id: task.id,
+      isDone: task.isDone,
+      priority: task.priority,
+      date: task.date,
+      categoryId: task.categoryId,
+      categoryName: task.category?.name ?? null,
+      completedAt: task.completedAt,
+    }));
+  }
+
   save(entity: TaskEntity): Promise<TaskEntity> {
     return this.repo.save(entity);
   }
 
   async remove(id: string): Promise<void> {
     await this.repo.delete(id);
+  }
+
+  countAll(): Promise<number> {
+    return this.repo.count();
+  }
+
+  countCompleted(): Promise<number> {
+    return this.repo.count({ where: { isDone: true } });
   }
 
   private buildFilteredQuery(
