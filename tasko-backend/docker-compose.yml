@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-tasko}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-tasko}
+      POSTGRES_DB: ${DB_DATABASE:-tasko}
+    ports:
+      - "5432:5432"
+    volumes:
+      - tasko_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-tasko}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_TYPE: postgres
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME:-tasko}
+      DB_PASSWORD: ${DB_PASSWORD:-tasko}
+      DB_DATABASE: ${DB_DATABASE:-tasko}
+      # Dev convenience default; override for any real environment.
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-1234567890123456}
+      JWT_ACCESS_TTL: 900s
+      JWT_REFRESH_TTL_DAYS: 30
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      STORAGE_DRIVER: local
+      UPLOAD_DIR: /app/storage
+      REDIS_URL: ""
+      SMTP_HOST: ""
+    ports:
+      - "3000:3000"
+    volumes:
+      - tasko_uploads:/app/storage
+
+volumes:
+  tasko_pgdata:
+  tasko_uploads:
