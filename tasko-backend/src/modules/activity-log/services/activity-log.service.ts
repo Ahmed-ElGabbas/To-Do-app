@@ -27,7 +27,11 @@ export class ActivityLogService implements TaskEventConsumer, OnModuleInit {
   }
 
   async handle(event: TaskEvent): Promise<void> {
-    if (await this.logs.findByEventId(event.id)) {
+    // Team-level events (e.g. invitation accepted) have no task to record.
+    if (
+      event.taskId === undefined ||
+      (await this.logs.findByEventId(event.id))
+    ) {
       return;
     }
     await this.logs.create({
@@ -54,6 +58,10 @@ function summarizeEvent(event: TaskEvent): string {
       return `Task reopened: ${quoted}`;
     case TaskEventType.TASK_DELETED:
       return `Task deleted: ${quoted}`;
+    case TaskEventType.COMMENT_ADDED:
+      return `Comment added: ${quoted}`;
+    case TaskEventType.TASK_ASSIGNED:
+      return `Task assigned: ${quoted}`;
     default:
       return `Task event: ${String(event.type)}`;
   }

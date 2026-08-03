@@ -10,6 +10,7 @@ import {
 import { TaskEventConsumer } from '../../../infrastructure/events/task-event.consumer';
 import { TaskEventBus } from '../../../infrastructure/events/task-event-bus.service';
 import { NotificationType } from '../constants/notification-type.enum';
+import { NotificationData } from '../entities/notification.entity';
 import { NotificationRepository } from '../interfaces/notification-repository';
 import { DeviceTokenRepository } from '../interfaces/device-token-repository';
 import { NotificationQueryDto } from '../dto/notification-query.dto';
@@ -92,7 +93,7 @@ export class NotificationService implements TaskEventConsumer, OnModuleInit {
       type: template.type,
       title: template.title,
       body: template.body,
-      data: { taskId: event.taskId },
+      data: buildNotificationData(event),
     });
 
     const devices = await this.devices.findByUser(event.userId);
@@ -101,7 +102,10 @@ export class NotificationService implements TaskEventConsumer, OnModuleInit {
         deviceTokens: devices.map((device) => device.token),
         title: notification.title,
         body: notification.body,
-        data: { notificationId: notification.id, taskId: event.taskId },
+        data: {
+          notificationId: notification.id,
+          ...(event.taskId ? { taskId: event.taskId } : {}),
+        },
       });
     }
   }
@@ -141,7 +145,42 @@ function notificationForEvent(event: TaskEvent): NotificationTemplate | null {
         title: 'Task deleted',
         body: `${quoted} was deleted.`,
       };
+    case TaskEventType.COMMENT_ADDED:
+      return {
+        type: NotificationType.COMMENT_ADDED,
+        title: 'New comment',
+        body: `${quoted} has a new comment.`,
+      };
+    case TaskEventType.INVITATION_ACCEPTED:
+      return {
+        type: NotificationType.INVITATION_ACCEPTED,
+        title: 'Invitation accepted',
+        body: `${
+          event.data.invitedEmail ?? 'Someone'
+        } accepted your team invitation.`,
+      };
+    case TaskEventType.TASK_ASSIGNED:
+      return {
+        type: NotificationType.TASK_ASSIGNED,
+        title: 'Task assigned',
+        body: `${quoted} was assigned to your team.`,
+      };
     default:
       return null;
   }
+}
+
+/** Builds the notification payload; only present fields are stored. */
+function buildNotificationData(event: TaskEvent): NotificationData | null {
+  const data: NotificationData = {};
+  if (event.taskId) {
+    data.taskId = event.taskId;
+  }
+  if (event.data.commentId) {
+    data.commentId = event.data.commentId;
+  }
+  if (event.data.invitedEmail) {
+    data.invitedEmail = event.data.invitedEmail;
+  }
+  return Object.keys(data).length > 0 ? data : null;
 }

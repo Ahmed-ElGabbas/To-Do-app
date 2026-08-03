@@ -9,7 +9,9 @@ import {
 import { NotificationType } from '../constants/notification-type.enum';
 
 export interface NotificationData {
-  taskId: string;
+  taskId?: string;
+  commentId?: string;
+  invitedEmail?: string;
 }
 
 /** A user's in-app notification; `isRead` tracks read-state. */

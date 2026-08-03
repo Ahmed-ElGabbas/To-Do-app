@@ -116,6 +116,8 @@ describe('ActivityLogService', () => {
         [TaskEventType.TASK_COMPLETED, 'Task completed: "Buy milk"'],
         [TaskEventType.TASK_REOPENED, 'Task reopened: "Buy milk"'],
         [TaskEventType.TASK_DELETED, 'Task deleted: "Buy milk"'],
+        [TaskEventType.COMMENT_ADDED, 'Comment added: "Buy milk"'],
+        [TaskEventType.TASK_ASSIGNED, 'Task assigned: "Buy milk"'],
       ];
 
       for (const [type, summary] of cases) {
@@ -124,6 +126,19 @@ describe('ActivityLogService', () => {
           expect.objectContaining({ type, summary }),
         );
       }
+    });
+
+    it('skips team-level events without a task', async () => {
+      logs.findByEventId.mockResolvedValue(null);
+
+      await service.handle(
+        makeEvent(TaskEventType.INVITATION_ACCEPTED, {
+          taskId: undefined,
+          data: { invitedEmail: 'guest@example.com' },
+        }),
+      );
+
+      expect(logs.create).not.toHaveBeenCalled();
     });
   });
 });

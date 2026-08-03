@@ -177,6 +177,70 @@ describe('NotificationService', () => {
         ]),
       );
     });
+
+    it('maps comment, invitation and assignment events', async () => {
+      notifications.findByEventId.mockResolvedValue(null);
+      notifications.create.mockImplementation((data) =>
+        Promise.resolve({ ...baseNotification, ...data }),
+      );
+      devices.findByUser.mockResolvedValue([]);
+
+      await service.handle(
+        makeEvent(TaskEventType.COMMENT_ADDED, {
+          data: { title: 'Buy milk', commentId: 'c1' },
+        }),
+      );
+      await service.handle(
+        makeEvent(TaskEventType.INVITATION_ACCEPTED, {
+          userId: OWNER,
+          taskId: undefined,
+          data: { invitedEmail: 'guest@example.com' },
+        }),
+      );
+      await service.handle(makeEvent(TaskEventType.TASK_ASSIGNED));
+
+      const created = notifications.create.mock.calls.map((call) => call[0]);
+      expect(created).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: NotificationType.COMMENT_ADDED,
+            title: 'New comment',
+            body: '"Buy milk" has a new comment.',
+            data: { taskId: TASK, commentId: 'c1' },
+          }),
+          expect.objectContaining({
+            type: NotificationType.INVITATION_ACCEPTED,
+            title: 'Invitation accepted',
+            body: 'guest@example.com accepted your team invitation.',
+            data: { invitedEmail: 'guest@example.com' },
+          }),
+          expect.objectContaining({
+            type: NotificationType.TASK_ASSIGNED,
+            title: 'Task assigned',
+            body: '"Buy milk" was assigned to your team.',
+          }),
+        ]),
+      );
+    });
+
+    it('omits the taskId from push data when the event has none', async () => {
+      notifications.findByEventId.mockResolvedValue(null);
+      notifications.create.mockResolvedValue(baseNotification);
+      devices.findByUser.mockResolvedValue([{ id: 'd1', token: 'tok-a' }]);
+
+      await service.handle(
+        makeEvent(TaskEventType.INVITATION_ACCEPTED, {
+          taskId: undefined,
+          data: { invitedEmail: 'guest@example.com' },
+        }),
+      );
+
+      expect(pushDispatcher.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { notificationId: baseNotification.id },
+        }),
+      );
+    });
   });
 
   describe('list', () => {

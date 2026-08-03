@@ -1,5 +1,8 @@
 import { NotificationType } from '../constants/notification-type.enum';
-import { NotificationEntity } from '../entities/notification.entity';
+import {
+  NotificationData,
+  NotificationEntity,
+} from '../entities/notification.entity';
 
 export interface NotificationListOptions {
   page: number;
@@ -13,7 +16,7 @@ export interface CreateNotificationData {
   type: NotificationType;
   title: string;
   body: string;
-  data: { taskId: string } | null;
+  data: NotificationData | null;
 }
 
 /** Data access contract for user notifications. */
