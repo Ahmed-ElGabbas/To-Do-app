@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Repository } from 'typeorm';
+import { In, IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import { TagEntity } from '../entities/tag.entity';
 import { TagRepository } from '../interfaces/tag-repository';
 
@@ -61,6 +61,39 @@ export class TypeOrmTagRepository extends TagRepository {
     name: string;
   }): Promise<TagEntity> {
     return this.repo.save(this.repo.create(data));
+  }
+
+  /**
+   * Searches personal tags plus team tags the user can see. Empty `teamIds`
+   * narrows the search to personal tags.
+   */
+  async searchForUser(
+    userId: string,
+    teamIds: string[],
+    q: string,
+    page: number,
+    limit: number,
+  ): Promise<[TagEntity[], number]> {
+    const build = (): SelectQueryBuilder<TagEntity> => {
+      const qb = this.repo.createQueryBuilder('tag');
+      if (teamIds.length > 0) {
+        qb.where(
+          '((tag.userId = :userId AND tag.teamId IS NULL) OR tag.teamId IN (:...teamIds))',
+          { userId, teamIds },
+        );
+      } else {
+        qb.where('tag.userId = :userId AND tag.teamId IS NULL', { userId });
+      }
+      return qb.andWhere('LOWER(tag.name) LIKE LOWER(:q)', { q: `%${q}%` });
+    };
+
+    const total = await build().getCount();
+    const items = await build()
+      .orderBy('tag.name', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+    return [items, total];
   }
 
   save(entity: TagEntity): Promise<TagEntity> {

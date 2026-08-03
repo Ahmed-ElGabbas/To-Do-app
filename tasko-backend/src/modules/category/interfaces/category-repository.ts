@@ -18,6 +18,18 @@ export abstract class CategoryRepository {
 
   abstract listByTeam(teamId: string): Promise<CategoryEntity[]>;
 
+  /**
+   * Searches personal categories plus categories in every team the user
+   * belongs to. `teamIds` is empty when the user has no teams.
+   */
+  abstract searchForUser(
+    userId: string,
+    teamIds: string[],
+    q: string,
+    page: number,
+    limit: number,
+  ): Promise<[CategoryEntity[], number]>;
+
   abstract create(data: {
     userId: string;
     teamId: string | null;

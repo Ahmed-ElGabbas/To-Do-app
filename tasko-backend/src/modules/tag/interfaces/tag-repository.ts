@@ -23,6 +23,18 @@ export abstract class TagRepository {
 
   abstract listByTeam(teamId: string): Promise<TagEntity[]>;
 
+  /**
+   * Searches personal tags plus tags in every team the user belongs to.
+   * `teamIds` is empty when the user has no teams.
+   */
+  abstract searchForUser(
+    userId: string,
+    teamIds: string[],
+    q: string,
+    page: number,
+    limit: number,
+  ): Promise<[TagEntity[], number]>;
+
   /** Loads only personal tags owned by `userId`. Used to validate task tag references. */
   abstract findByIdsForUser(
     userId: string,
