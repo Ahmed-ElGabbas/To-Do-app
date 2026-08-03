@@ -199,6 +199,49 @@ export class AuthService {
     await this.revokeAllSessions(userId);
   }
 
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const user = await this.userService.findByIdWithHash(userId);
+    if (!user || !(await argon2.verify(user.passwordHash, currentPassword))) {
+      throw new UnauthorizedError('Current password is incorrect');
+    }
+
+    const passwordHash = await argon2.hash(newPassword);
+    await this.userService.updatePassword(userId, passwordHash);
+    await this.revokeAllSessions(userId);
+
+    return {
+      message: 'Password updated. All other sessions have been signed out.',
+    };
+  }
+
+  async changeEmail(
+    userId: string,
+    newEmail: string,
+    currentPassword: string,
+  ): Promise<{ message: string }> {
+    const user = await this.userService.findByIdWithHash(userId);
+    if (!user || !(await argon2.verify(user.passwordHash, currentPassword))) {
+      throw new UnauthorizedError('Current password is incorrect');
+    }
+
+    const existing = await this.userService.findByEmail(newEmail);
+    if (existing && existing.id !== userId) {
+      throw new ConflictError('An account with this email already exists');
+    }
+
+    await this.userService.updateEmail(userId, newEmail);
+    await this.issueVerificationToken(userId, newEmail);
+
+    return {
+      message:
+        'Email updated. A verification link has been sent to the new address.',
+    };
+  }
+
   async profile(userId: string): Promise<PublicUser> {
     const user = await this.userService.findById(userId);
     return this.toPublic(user);

@@ -21,13 +21,18 @@ import { PushModule } from './infrastructure/push/push.module';
 import { QueueModule } from './infrastructure/queue/queue.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { ActivityLogModule } from './modules/activity-log/activity-log.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CategoryModule } from './modules/category/category.module';
+import { CommentModule } from './modules/comment/comment.module';
 import { FileModule } from './modules/file/file.module';
 import { HealthModule } from './modules/health/health.module';
+import { InvitationModule } from './modules/invitation/invitation.module';
 import { MemberModule } from './modules/member/member.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { SearchModule } from './modules/search/search.module';
 import { TagModule } from './modules/tag/tag.module';
 import { TaskModule } from './modules/task/task.module';
 import { TeamModule } from './modules/team/team.module';
@@ -73,6 +78,11 @@ import { UserModule } from './modules/user/user.module';
     FileModule,
     TeamModule,
     MemberModule,
+    InvitationModule,
+    CommentModule,
+    SearchModule,
+    AnalyticsModule,
+    AdminModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

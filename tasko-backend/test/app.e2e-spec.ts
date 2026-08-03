@@ -1,3 +1,6 @@
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+require('better-sqlite3')().close();
+
 process.env.NODE_ENV = 'test';
 process.env.DB_TYPE = 'sqlite';
 process.env.DB_FILE = ':memory:';
@@ -14,8 +17,10 @@ import { ThrottlerStorageService } from '@nestjs/throttler/dist/throttler.servic
 import request from 'supertest';
 import { randomUUID } from 'node:crypto';
 import { AppModule } from '../src/app.module';
+import { Role } from '../src/common/constants/role.enum';
 import { LogMailerService } from '../src/infrastructure/mailer/log-mailer.service';
 import { MailerService } from '../src/infrastructure/mailer/mailer.service';
+import { UserService } from '../src/modules/user/user.service';
 
 const TOKEN_IN_HTML = /token=([A-Za-z0-9_-]+)/;
 
@@ -1156,6 +1161,300 @@ describe('Tasko API (e2e)', () => {
         .set('Authorization', `Bearer ${token}`)
         .expect(422);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
+  });
+
+  describe('search', () => {
+    it('searches tasks, teams, categories, and tags across scopes', async () => {
+      const token = await signUp('search-all@example.com');
+
+      const team = await request(app.getHttpServer())
+        .post('/teams')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Sprint Squad', description: 'Build fast' })
+        .expect(201);
+      const teamId = team.body.data.id;
+
+      await request(app.getHttpServer())
+        .post(`/teams/${teamId}/tasks`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'Design sprint', time: '09:00 AM', date: 'today' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post('/tasks')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'Sprint recap notes', time: '10:00 AM', date: 'today' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/teams/${teamId}/categories`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Sprint planning' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/teams/${teamId}/tags`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'sprint-urgent' })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .get('/search?q=sprint')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(res.body.data.results.tasks.total).toBe(2);
+      expect(res.body.data.results.teams.total).toBe(1);
+      expect(res.body.data.results.categories.total).toBe(1);
+      expect(res.body.data.results.tags.total).toBe(1);
+      expect(res.body.data.results.tasks.items[0].type).toBe('task');
+      expect(res.body.data.results.tags.items[0].type).toBe('tag');
+    });
+
+    it('searches only the requested scope', async () => {
+      const token = await signUp('search-scope@example.com');
+      await request(app.getHttpServer())
+        .post('/teams')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Alpha Workspace' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .post('/tasks')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'Alpha task', time: '09:00 AM', date: 'today' })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .get('/search?q=alpha&scope=tasks')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(res.body.data.results.tasks.total).toBe(1);
+      expect(res.body.data.results.teams.total).toBe(0);
+      expect(res.body.data.results.tasks.items[0].title).toBe('Alpha task');
+    });
+
+    it('restricts search to a team the caller belongs to', async () => {
+      const member = await signUp('search-member@example.com');
+      const outsider = await signUp('search-outsider@example.com');
+
+      const team = await request(app.getHttpServer())
+        .post('/teams')
+        .set('Authorization', `Bearer ${member}`)
+        .send({ name: 'Inner Circle' })
+        .expect(201);
+      const teamId = team.body.data.id;
+      await request(app.getHttpServer())
+        .post(`/teams/${teamId}/tasks`)
+        .set('Authorization', `Bearer ${member}`)
+        .send({ title: 'Inner task', time: '09:00 AM', date: 'today' })
+        .expect(201);
+
+      const scoped = await request(app.getHttpServer())
+        .get(`/search?q=inner&teamId=${teamId}`)
+        .set('Authorization', `Bearer ${member}`)
+        .expect(200);
+      expect(scoped.body.data.results.tasks.total).toBe(1);
+      expect(scoped.body.data.results.teams.total).toBe(1);
+
+      const denied = await request(app.getHttpServer())
+        .get(`/search?q=inner&teamId=${teamId}`)
+        .set('Authorization', `Bearer ${outsider}`)
+        .expect(403);
+      expect(denied.body.error.code).toBe('FORBIDDEN');
+    });
+  });
+
+  describe('analytics', () => {
+    it('summarizes personal completion, priority, and overdue', async () => {
+      const token = await signUp('analytics-personal@example.com');
+      const create = (title: string, date: string, priority: string) =>
+        request(app.getHttpServer())
+          .post('/tasks')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ title, time: '09:00 AM', date, priority })
+          .expect(201);
+
+      const done = await create('Done high', '2026-08-01', 'high');
+      await request(app.getHttpServer())
+        .patch(`/tasks/${done.body.data.id}/done`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ isDone: true })
+        .expect(200);
+      await create('Pending medium', '2026-08-10', 'medium');
+      await create('Overdue low', '2000-01-01', 'low');
+
+      const res = await request(app.getHttpServer())
+        .get('/analytics')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const data = res.body.data;
+      expect(data.total).toBe(3);
+      expect(data.completed).toBe(1);
+      expect(data.pending).toBe(2);
+      expect(data.overdue).toBe(1);
+      expect(data.byPriority).toEqual({ high: 1, medium: 1, low: 1 });
+      expect(data.completionTrend).toHaveLength(7);
+      expect(data.completionTrend[6].completed).toBe(1);
+    });
+
+    it('exposes team analytics to members only', async () => {
+      const member = await signUp('analytics-team@example.com');
+      const outsider = await signUp('analytics-outsider@example.com');
+
+      const team = await request(app.getHttpServer())
+        .post('/teams')
+        .set('Authorization', `Bearer ${member}`)
+        .send({ name: 'Analytics Team' })
+        .expect(201);
+      const teamId = team.body.data.id;
+      await request(app.getHttpServer())
+        .post(`/teams/${teamId}/tasks`)
+        .set('Authorization', `Bearer ${member}`)
+        .send({ title: 'Team task', time: '09:00 AM', date: 'today' })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .get(`/teams/${teamId}/analytics`)
+        .set('Authorization', `Bearer ${member}`)
+        .expect(200);
+      expect(res.body.data.total).toBe(1);
+
+      const denied = await request(app.getHttpServer())
+        .get(`/teams/${teamId}/analytics`)
+        .set('Authorization', `Bearer ${outsider}`)
+        .expect(403);
+      expect(denied.body.error.code).toBe('FORBIDDEN');
+    });
+  });
+
+  describe('admin', () => {
+    async function promoteToAdmin(email: string): Promise<string> {
+      const signup = await request(app.getHttpServer())
+        .post('/auth/signup')
+        .send({
+          email,
+          password: 'password123',
+          firstName: 'Admin',
+          lastName: 'Bootstrap',
+        })
+        .expect(201);
+      await app
+        .get(UserService)
+        .updateRole(signup.body.data.user.id, Role.ADMIN);
+      const login = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email, password: 'password123' })
+        .expect(200);
+      return login.body.data.tokens.accessToken;
+    }
+
+    it('requires the ADMIN role and serves platform stats', async () => {
+      const plain = await signUp('admin-plain@example.com');
+      const admin = await promoteToAdmin('admin-owner@example.com');
+
+      await request(app.getHttpServer()).get('/admin/stats').expect(401);
+
+      const forbidden = await request(app.getHttpServer())
+        .get('/admin/stats')
+        .set('Authorization', `Bearer ${plain}`)
+        .expect(403);
+      expect(forbidden.body.error.code).toBe('FORBIDDEN');
+
+      const before = await request(app.getHttpServer())
+        .get('/admin/stats')
+        .set('Authorization', `Bearer ${admin}`)
+        .expect(200);
+      const stats = before.body.data;
+      expect(stats.totalUsers).toBeGreaterThan(0);
+      expect(stats.totalTeams).toBeGreaterThanOrEqual(0);
+      expect(stats.totalTasks).toBeGreaterThanOrEqual(0);
+      expect(stats.completedTasks).toBeGreaterThanOrEqual(0);
+
+      await request(app.getHttpServer())
+        .post('/tasks')
+        .set('Authorization', `Bearer ${plain}`)
+        .send({ title: 'Admin watch task', time: '09:00 AM', date: 'today' })
+        .expect(201);
+
+      const after = await request(app.getHttpServer())
+        .get('/admin/stats')
+        .set('Authorization', `Bearer ${admin}`)
+        .expect(200);
+      expect(after.body.data.totalTasks).toBe(stats.totalTasks + 1);
+    });
+
+    it('lists users and promotes a user to ADMIN', async () => {
+      const admin = await promoteToAdmin('admin-owner2@example.com');
+      await signUp('admin-target@example.com');
+
+      const list = await request(app.getHttpServer())
+        .get('/admin/users')
+        .set('Authorization', `Bearer ${admin}`)
+        .expect(200);
+      expect(list.body.data.items.length).toBeGreaterThan(0);
+      expect(list.body.data.total).toBeGreaterThan(0);
+
+      const findTarget = await request(app.getHttpServer())
+        .get('/admin/users?q=admin-target')
+        .set('Authorization', `Bearer ${admin}`)
+        .expect(200);
+      expect(findTarget.body.data.items[0].email).toBe(
+        'admin-target@example.com',
+      );
+      expect(findTarget.body.data.items[0].role).toBe('USER');
+
+      const targetId = findTarget.body.data.items[0].id;
+      const promoted = await request(app.getHttpServer())
+        .patch(`/admin/users/${targetId}`)
+        .set('Authorization', `Bearer ${admin}`)
+        .send({ role: 'ADMIN' })
+        .expect(200);
+      expect(promoted.body.data.role).toBe('ADMIN');
+
+      const meRes = await request(app.getHttpServer())
+        .get('/auth/me')
+        .set('Authorization', `Bearer ${admin}`)
+        .expect(200);
+      const selfDemotion = await request(app.getHttpServer())
+        .patch(`/admin/users/${meRes.body.data.id}`)
+        .set('Authorization', `Bearer ${admin}`)
+        .send({ role: 'USER' })
+        .expect(409);
+      expect(selfDemotion.body.error.code).toBe('CONFLICT');
+
+      await request(app.getHttpServer())
+        .patch(`/admin/users/${targetId}`)
+        .set('Authorization', `Bearer ${admin}`)
+        .send({ role: 'USER' })
+        .expect(200);
+    });
+
+    it('lists teams and exposes the team detail with members', async () => {
+      const admin = await promoteToAdmin('admin-owner3@example.com');
+      const team = await request(app.getHttpServer())
+        .post('/teams')
+        .set('Authorization', `Bearer ${admin}`)
+        .send({ name: 'Admin Squad' })
+        .expect(201);
+      const teamId = team.body.data.id;
+
+      const list = await request(app.getHttpServer())
+        .get('/admin/teams?q=Admin Squad')
+        .set('Authorization', `Bearer ${admin}`)
+        .expect(200);
+      expect(list.body.data.total).toBeGreaterThanOrEqual(1);
+      const listed = list.body.data.items.find(
+        (t: { id: string }) => t.id === teamId,
+      );
+      expect(listed).toBeDefined();
+      expect(listed.memberCount).toBe(1);
+
+      const detail = await request(app.getHttpServer())
+        .get(`/admin/teams/${teamId}`)
+        .set('Authorization', `Bearer ${admin}`)
+        .expect(200);
+      expect(detail.body.data.team.id).toBe(teamId);
+      expect(detail.body.data.members).toHaveLength(1);
+      expect(detail.body.data.members[0].email).toContain('admin-owner3');
     });
   });
 });

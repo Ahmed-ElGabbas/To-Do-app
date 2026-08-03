@@ -25,4 +25,20 @@ export abstract class MemberRepository {
   abstract save(entity: TeamMemberEntity): Promise<TeamMemberEntity>;
 
   abstract remove(id: string): Promise<void>;
+
+  /**
+   * Every membership of a team with the member's public profile, used by the
+   * admin team-detail view.
+   */
+  abstract listByTeamDetailed(teamId: string): Promise<
+    Array<{
+      member: TeamMemberEntity;
+      user: { id: string; email: string; firstName: string; lastName: string };
+    }>
+  >;
+
+  /** Member counts grouped by team, used by the admin team listing. */
+  abstract countByTeamIds(
+    teamIds: string[],
+  ): Promise<Array<{ teamId: string; count: number }>>;
 }

@@ -19,7 +19,7 @@ coverage/
 .nyc_output/
 
 # local file storage (dev/test uploads)
-storage/
+/storage/
 
 # local databases
 *.sqlite

@@ -18,10 +18,12 @@ describe('AuthService', () => {
   const userService = {
     findByEmail: jest.fn(),
     findByEmailWithHash: jest.fn(),
+    findByIdWithHash: jest.fn(),
     create: jest.fn(),
     findById: jest.fn(),
     touchLastLogin: jest.fn(),
     updatePassword: jest.fn(),
+    updateEmail: jest.fn(),
     markEmailVerified: jest.fn(),
   };
   const mailer = { sendMail: jest.fn() };
@@ -335,6 +337,112 @@ describe('AuthService', () => {
         code: 'UNAUTHORIZED',
       });
       expect(refreshRepo.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('changePassword', () => {
+    it('verifies the current password, updates the hash, and revokes sessions', async () => {
+      const passwordHash = await argon2.hash('currentpassword1');
+      userService.findByIdWithHash.mockResolvedValue({
+        ...user,
+        passwordHash,
+      });
+
+      await service.changePassword(
+        user.id,
+        'currentpassword1',
+        'newpassword123',
+      );
+
+      const [userId, hash] = userService.updatePassword.mock.calls[0];
+      expect(userId).toBe(user.id);
+      expect(await argon2.verify(hash, 'newpassword123')).toBe(true);
+      expect(refreshRepo.update).toHaveBeenCalledWith(
+        { userId: user.id },
+        expect.anything(),
+      );
+    });
+
+    it('rejects a wrong current password', async () => {
+      const passwordHash = await argon2.hash('currentpassword1');
+      userService.findByIdWithHash.mockResolvedValue({
+        ...user,
+        passwordHash,
+      });
+
+      await expect(
+        service.changePassword(user.id, 'wrong-password', 'newpassword123'),
+      ).rejects.toBeInstanceOf(UnauthorizedError);
+      expect(userService.updatePassword).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown user', async () => {
+      userService.findByIdWithHash.mockResolvedValue(null);
+      await expect(
+        service.changePassword(user.id, 'currentpassword1', 'newpassword123'),
+      ).rejects.toBeInstanceOf(UnauthorizedError);
+      expect(userService.updatePassword).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('changeEmail', () => {
+    it('verifies the password, updates the email, and issues re-verification', async () => {
+      const passwordHash = await argon2.hash('currentpassword1');
+      userService.findByIdWithHash.mockResolvedValue({
+        ...user,
+        passwordHash,
+      });
+      userService.findByEmail.mockResolvedValue(null);
+
+      await service.changeEmail(
+        user.id,
+        'alice.new@example.com',
+        'currentpassword1',
+      );
+
+      expect(userService.updateEmail).toHaveBeenCalledWith(
+        user.id,
+        'alice.new@example.com',
+      );
+      expect(verificationRepo.insert).toHaveBeenCalledTimes(1);
+      expect(mailer.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'alice.new@example.com' }),
+      );
+    });
+
+    it('rejects an email already in use by another account', async () => {
+      const passwordHash = await argon2.hash('currentpassword1');
+      userService.findByIdWithHash.mockResolvedValue({
+        ...user,
+        passwordHash,
+      });
+      userService.findByEmail.mockResolvedValue({
+        id: 'someone-else',
+        email: 'alice.new@example.com',
+      });
+
+      await expect(
+        service.changeEmail(
+          user.id,
+          'alice.new@example.com',
+          'currentpassword1',
+        ),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(userService.updateEmail).not.toHaveBeenCalled();
+      expect(verificationRepo.insert).not.toHaveBeenCalled();
+    });
+
+    it('rejects a wrong current password', async () => {
+      const passwordHash = await argon2.hash('currentpassword1');
+      userService.findByIdWithHash.mockResolvedValue({
+        ...user,
+        passwordHash,
+      });
+
+      await expect(
+        service.changeEmail(user.id, 'alice.new@example.com', 'wrong-password'),
+      ).rejects.toBeInstanceOf(UnauthorizedError);
+      expect(userService.updateEmail).not.toHaveBeenCalled();
     });
   });
 });
