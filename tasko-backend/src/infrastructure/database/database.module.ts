@@ -5,7 +5,9 @@ import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 /**
  * Registers the TypeORM connection from validated configuration. Uses
  * better-sqlite3 (in-memory in tests) or Postgres depending on DB_TYPE.
- * `synchronize` is driven by config; production defaults should disable it.
+ * `synchronize` defaults to true for sqlite tiers (dev/test) and false for
+ * Postgres; production schema changes must go through the migration pipeline
+ * in src/database/migrations (see ADR-0004).
  */
 @Module({
   imports: [

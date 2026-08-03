@@ -20,7 +20,12 @@ export const validationSchema = Joi.object({
   DB_PASSWORD: Joi.string().default('tasko'),
   DB_DATABASE: Joi.string().default('tasko'),
   DB_FILE: Joi.string().default('tasko.sqlite'),
-  DB_SYNCHRONIZE: Joi.boolean().truthy('true').falsy('false').default(true),
+  // Defaults to true for sqlite tiers (dev/test) and false for Postgres (prod);
+  // see ADR-0004. No Joi default here: @nestjs/config writes validated values
+  // back into process.env, so a default(false) would pin DB_SYNCHRONIZE to
+  // 'false' even when unset and override the per-driver default in
+  // configuration.ts. Explicit DB_SYNCHRONIZE is converted truthy/falsy.
+  DB_SYNCHRONIZE: Joi.boolean().truthy('true').falsy('false'),
 
   REDIS_URL: Joi.string().allow('').default(''),
 

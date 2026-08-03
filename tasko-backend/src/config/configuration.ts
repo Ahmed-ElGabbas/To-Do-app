@@ -19,8 +19,13 @@ export default () => ({
     password: process.env.DB_PASSWORD ?? 'tasko',
     database: process.env.DB_DATABASE ?? 'tasko',
     file: process.env.DB_FILE ?? 'tasko.sqlite',
+    // Postgres never auto-syncs (migrations only); sqlite tiers sync by default
+    // so dev/test start with a working schema (ADR-0004). An explicit
+    // DB_SYNCHRONIZE env var overrides the per-driver default.
     synchronize:
-      (process.env.DB_SYNCHRONIZE ?? 'true').toLowerCase() === 'true',
+      process.env.DB_SYNCHRONIZE !== undefined
+        ? process.env.DB_SYNCHRONIZE.toLowerCase() === 'true'
+        : (process.env.DB_TYPE ?? 'postgres') === 'sqlite',
   },
   redis: {
     url: process.env.REDIS_URL ?? '',
