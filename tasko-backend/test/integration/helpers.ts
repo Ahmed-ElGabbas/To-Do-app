@@ -1,14 +1,19 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 require('better-sqlite3')().close();
 
-process.env.NODE_ENV = 'test';
-process.env.DB_TYPE = 'sqlite';
-process.env.DB_FILE = ':memory:';
-process.env.JWT_SECRET =
-  'integration-test-secret-that-is-definitely-long-enough-123456';
-process.env.REDIS_URL = '';
-process.env.SMTP_HOST = '';
-process.env.MAIL_FROM = 'no-reply@tasko.dev';
+// Defaults are only applied when unset so a CI job can run this suite against a
+// real Postgres service container by setting DB_TYPE=postgres (+ DB_HOST etc.).
+if (process.env.NODE_ENV === undefined) process.env.NODE_ENV = 'test';
+if (process.env.DB_TYPE === undefined) process.env.DB_TYPE = 'sqlite';
+if (process.env.DB_FILE === undefined) process.env.DB_FILE = ':memory:';
+if (process.env.JWT_SECRET === undefined) {
+  process.env.JWT_SECRET =
+    'integration-test-secret-that-is-definitely-long-enough-123456';
+}
+if (process.env.REDIS_URL === undefined) process.env.REDIS_URL = '';
+if (process.env.SMTP_HOST === undefined) process.env.SMTP_HOST = '';
+if (process.env.MAIL_FROM === undefined)
+  process.env.MAIL_FROM = 'no-reply@tasko.dev';
 
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { getStorageToken } from '@nestjs/throttler';
