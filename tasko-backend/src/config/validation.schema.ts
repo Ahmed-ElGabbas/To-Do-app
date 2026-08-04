@@ -42,9 +42,6 @@ export const validationSchema = Joi.object({
   UPLOAD_DIR: Joi.string().default('./storage'),
   MAX_FILE_SIZE_MB: Joi.number().integer().min(1).max(50).default(5),
 
-  FILE_SIGNING_SECRET: Joi.string().min(16).allow('').default(''),
-  FILE_SIGNED_URL_TTL_SECONDS: Joi.number().integer().min(60).default(3600),
-
   S3_BUCKET: Joi.string().allow('').default(''),
   S3_REGION: Joi.string().default('us-east-1'),
   S3_ACCESS_KEY_ID: Joi.string().allow('').default(''),

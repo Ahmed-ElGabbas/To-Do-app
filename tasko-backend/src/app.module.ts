@@ -1,9 +1,7 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { LoggerModule } from './common/logger/logger.module';
-import { LoggerService } from './common/logger/logger.service';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -11,6 +9,9 @@ import { TeamMembershipGuard } from './common/guards/team-membership.guard';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { LoggerModule } from './common/logger/logger.module';
+import { LoggerService } from './common/logger/logger.service';
+import { correlationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import configuration from './config/configuration';
 import { validationSchema } from './config/validation.schema';
 import { CacheModule } from './infrastructure/cache/cache.module';
@@ -106,4 +107,8 @@ import { UserModule } from './modules/user/user.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(correlationIdMiddleware).forRoutes('*');
+  }
+}

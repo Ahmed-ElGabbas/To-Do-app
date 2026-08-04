@@ -48,15 +48,6 @@ export default () => ({
     maxFileSizeBytes:
       parseInt(process.env.MAX_FILE_SIZE_MB ?? '5', 10) * 1024 * 1024,
   },
-  file: {
-    /** HMAC secret for signed download URLs; empty falls back to JWT_SECRET. */
-    signingSecret: process.env.FILE_SIGNING_SECRET ?? '',
-    /** Seconds a signed download URL stays valid. */
-    signedUrlTtlSeconds: parseInt(
-      process.env.FILE_SIGNED_URL_TTL_SECONDS ?? '3600',
-      10,
-    ),
-  },
   s3: {
     bucket: process.env.S3_BUCKET ?? '',
     region: process.env.S3_REGION ?? 'us-east-1',

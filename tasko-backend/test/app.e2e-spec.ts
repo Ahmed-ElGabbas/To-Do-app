@@ -20,6 +20,7 @@ import { AppModule } from '../src/app.module';
 import { Role } from '../src/common/constants/role.enum';
 import { LogMailerService } from '../src/infrastructure/mailer/log-mailer.service';
 import { MailerService } from '../src/infrastructure/mailer/mailer.service';
+import { LoggerService } from '../src/common/logger/logger.service';
 import { UserService } from '../src/modules/user/user.service';
 
 const TOKEN_IN_HTML = /token=([A-Za-z0-9_-]+)/;
@@ -28,11 +29,35 @@ describe('Tasko API (e2e)', () => {
   let app: INestApplication;
   let mailer: LogMailerService;
   let throttlerStorage: ThrottlerStorageService;
+  let loggerSpy: {
+    info: jest.Mock;
+    warn: jest.Mock;
+    error: jest.Mock;
+    debug: jest.Mock;
+    log: jest.Mock;
+    verbose: jest.Mock;
+    fatal: jest.Mock;
+    setContext: jest.Mock;
+  };
 
   beforeAll(async () => {
+    loggerSpy = {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+      log: jest.fn(),
+      verbose: jest.fn(),
+      fatal: jest.fn(),
+      setContext: jest.fn(),
+    };
+
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(LoggerService)
+      .useValue(loggerSpy)
+      .compile();
 
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(
@@ -55,6 +80,8 @@ describe('Tasko API (e2e)', () => {
   beforeEach(() => {
     mailer.clearSentMessages();
     throttlerStorage.storage.clear();
+    loggerSpy.info.mockClear();
+    loggerSpy.warn.mockClear();
   });
 
   describe('health', () => {
@@ -1455,6 +1482,36 @@ describe('Tasko API (e2e)', () => {
       expect(detail.body.data.team.id).toBe(teamId);
       expect(detail.body.data.members).toHaveLength(1);
       expect(detail.body.data.members[0].email).toContain('admin-owner3');
+    });
+  });
+
+  describe('correlation id', () => {
+    it('echoes an incoming X-Correlation-Id header on the response', async () => {
+      const incoming = `incoming-${randomUUID()}`;
+      const res = await request(app.getHttpServer())
+        .get('/health')
+        .set('X-Correlation-Id', incoming)
+        .expect(200);
+      expect(res.headers['x-correlation-id']).toBe(incoming);
+    });
+
+    it('generates a correlation id when none is supplied and keeps it consistent across the log line and the error response', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/auth/me')
+        .expect(401);
+
+      const bodyCorrelationId = res.body.error.correlationId as string;
+      expect(bodyCorrelationId).toBeTruthy();
+      expect(res.headers['x-correlation-id']).toBe(bodyCorrelationId);
+
+      const rejectedLog = loggerSpy.warn.mock.calls.find(([message, meta]) => {
+        return (
+          message === 'request_rejected' &&
+          (meta as { correlationId?: string }).correlationId ===
+            bodyCorrelationId
+        );
+      });
+      expect(rejectedLog).toBeDefined();
     });
   });
 });
