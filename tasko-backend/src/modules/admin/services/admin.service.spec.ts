@@ -2,6 +2,8 @@ import { Test } from '@nestjs/testing';
 import { ResourceNotFoundError } from '../../../common/errors/domain-error';
 import { Role } from '../../../common/constants/role.enum';
 import { TeamRole } from '../../../common/constants/team-role.enum';
+import { TaskEventType } from '../../../infrastructure/events/task-event';
+import { TaskEventBus } from '../../../infrastructure/events/task-event-bus.service';
 import { MemberRepository } from '../../member/interfaces/member-repository';
 import { TaskRepository } from '../../task/interfaces/task-repository';
 import { TeamRepository } from '../../team/interfaces/team-repository';
@@ -26,6 +28,7 @@ describe('AdminService', () => {
   };
   const members = { countByTeamIds: jest.fn(), listByTeamDetailed: jest.fn() };
   const tasks = { countAll: jest.fn(), countCompleted: jest.fn() };
+  const eventBus = { publish: jest.fn() };
 
   let service: AdminService;
 
@@ -38,6 +41,7 @@ describe('AdminService', () => {
         { provide: TeamRepository, useValue: teams },
         { provide: MemberRepository, useValue: members },
         { provide: TaskRepository, useValue: tasks },
+        { provide: TaskEventBus, useValue: eventBus },
       ],
     }).compile();
     service = moduleRef.get(AdminService);
@@ -92,11 +96,26 @@ describe('AdminService', () => {
   });
 
   describe('updateRole', () => {
-    it('promotes a user to admin', async () => {
+    it('promotes a user to admin and emits an audit event', async () => {
+      users.findById.mockResolvedValue(userEntity(TARGET));
       users.updateRole.mockResolvedValue(userEntity(TARGET, Role.ADMIN));
+
       const result = await service.updateRole(ADMIN, TARGET, Role.ADMIN);
+
       expect(users.updateRole).toHaveBeenCalledWith(TARGET, Role.ADMIN);
       expect(result.role).toBe(Role.ADMIN);
+      expect(eventBus.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: TaskEventType.USER_ROLE_CHANGED,
+          userId: ADMIN,
+          data: {
+            targetUserId: TARGET,
+            targetEmail: `${TARGET}@example.com`,
+            previousRole: Role.USER,
+            newRole: Role.ADMIN,
+          },
+        }),
+      );
     });
 
     it('rejects an admin demoting themselves', async () => {
@@ -104,9 +123,11 @@ describe('AdminService', () => {
         'Admins cannot change their own role',
       );
       expect(users.updateRole).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
     });
 
     it('allows an admin to keep themselves as admin', async () => {
+      users.findById.mockResolvedValue(userEntity(ADMIN, Role.ADMIN));
       users.updateRole.mockResolvedValue(userEntity(ADMIN, Role.ADMIN));
       await expect(
         service.updateRole(ADMIN, ADMIN, Role.ADMIN),

@@ -140,5 +140,39 @@ describe('ActivityLogService', () => {
 
       expect(logs.create).not.toHaveBeenCalled();
     });
+
+    it('audits admin role changes against the target account', async () => {
+      logs.findByEventId.mockResolvedValue(null);
+      const target = '55555555-5555-4555-8555-555555555555';
+
+      await service.handle(
+        makeEvent(TaskEventType.USER_ROLE_CHANGED, {
+          taskId: undefined,
+          data: {
+            targetUserId: target,
+            targetEmail: 'promoted@example.com',
+            previousRole: 'USER',
+            newRole: 'ADMIN',
+          },
+        }),
+      );
+
+      expect(logs.create).toHaveBeenCalledWith({
+        userId: OWNER,
+        eventId: EVENT_ID,
+        type: TaskEventType.USER_ROLE_CHANGED,
+        entityId: target,
+        summary: 'Role changed for promoted@example.com: USER -> ADMIN',
+        metadata: {
+          occurredAt: '2026-01-01T00:00:00.000Z',
+          data: {
+            targetUserId: target,
+            targetEmail: 'promoted@example.com',
+            previousRole: 'USER',
+            newRole: 'ADMIN',
+          },
+        },
+      });
+    });
   });
 });

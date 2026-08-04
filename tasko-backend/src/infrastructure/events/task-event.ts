@@ -11,7 +11,10 @@ export enum TaskEventType {
   TASK_DELETED = 'task.deleted',
   COMMENT_ADDED = 'comment.added',
   INVITATION_ACCEPTED = 'invitation.accepted',
+  // Emitted when a NEW TEAM TASK is created, notifying every other member
+  // (there is no assigneeId concept anywhere); the name predates teams.
   TASK_ASSIGNED = 'task.assigned',
+  USER_ROLE_CHANGED = 'user.role.changed',
 }
 
 export interface TaskEventData {
@@ -23,6 +26,14 @@ export interface TaskEventData {
   comment?: string;
   /** Invited e-mail on INVITATION_ACCEPTED events. */
   invitedEmail?: string;
+  /** Target account id on USER_ROLE_CHANGED events. */
+  targetUserId?: string;
+  /** Target account e-mail on USER_ROLE_CHANGED events. */
+  targetEmail?: string;
+  /** Role before the change on USER_ROLE_CHANGED events. */
+  previousRole?: string;
+  /** New role on USER_ROLE_CHANGED events. */
+  newRole?: string;
 }
 
 export interface TaskEvent {

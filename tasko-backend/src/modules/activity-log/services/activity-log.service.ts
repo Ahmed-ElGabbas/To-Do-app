@@ -27,11 +27,26 @@ export class ActivityLogService implements TaskEventConsumer, OnModuleInit {
   }
 
   async handle(event: TaskEvent): Promise<void> {
+    // Delivery is idempotent: a replayed event id is skipped.
+    if (await this.logs.findByEventId(event.id)) {
+      return;
+    }
+
+    // Admin role changes are audited against the target account (no task).
+    if (event.type === TaskEventType.USER_ROLE_CHANGED) {
+      await this.logs.create({
+        userId: event.userId,
+        eventId: event.id,
+        type: event.type,
+        entityId: event.data.targetUserId ?? event.userId,
+        summary: summarizeEvent(event),
+        metadata: { occurredAt: event.occurredAt, data: event.data },
+      });
+      return;
+    }
+
     // Team-level events (e.g. invitation accepted) have no task to record.
-    if (
-      event.taskId === undefined ||
-      (await this.logs.findByEventId(event.id))
-    ) {
+    if (event.taskId === undefined) {
       return;
     }
     await this.logs.create({
@@ -62,6 +77,10 @@ function summarizeEvent(event: TaskEvent): string {
       return `Comment added: ${quoted}`;
     case TaskEventType.TASK_ASSIGNED:
       return `Task assigned: ${quoted}`;
+    case TaskEventType.USER_ROLE_CHANGED:
+      return `Role changed for ${
+        event.data.targetEmail ?? 'a user'
+      }: ${event.data.previousRole} -> ${event.data.newRole}`;
     default:
       return `Task event: ${String(event.type)}`;
   }

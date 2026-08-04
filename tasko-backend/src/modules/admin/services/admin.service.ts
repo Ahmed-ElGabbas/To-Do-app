@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import {
   ConflictError,
   ResourceNotFoundError,
 } from '../../../common/errors/domain-error';
 import { Role } from '../../../common/constants/role.enum';
 import { PaginatedResult } from '../../../common/types/paginated-result';
+import { TaskEventType } from '../../../infrastructure/events/task-event';
+import { TaskEventBus } from '../../../infrastructure/events/task-event-bus.service';
 import { MemberRepository } from '../../member/interfaces/member-repository';
 import { TaskRepository } from '../../task/interfaces/task-repository';
 import { TeamRepository } from '../../team/interfaces/team-repository';
@@ -28,6 +31,7 @@ export class AdminService {
     private readonly teams: TeamRepository,
     private readonly members: MemberRepository,
     private readonly tasks: TaskRepository,
+    private readonly eventBus: TaskEventBus,
   ) {}
 
   async stats(): Promise<AdminStatsOutput> {
@@ -62,7 +66,9 @@ export class AdminService {
 
   /**
    * Promotes or demotes a user. An admin cannot demote themselves (that would
-   * lock the caller out of the role that lets them manage it).
+   * lock the caller out of the role that lets them manage it). Every role
+   * change emits a USER_ROLE_CHANGED event so an Activity Log audit entry is
+   * written without exception (idempotent on the unique event id).
    */
   async updateRole(
     actorId: string,
@@ -72,7 +78,21 @@ export class AdminService {
     if (actorId === id && role !== Role.ADMIN) {
       throw new ConflictError('Admins cannot change their own role');
     }
-    return toAdminUserOutput(await this.users.updateRole(id, role));
+    const before = await this.users.findById(id);
+    const updated = await this.users.updateRole(id, role);
+    await this.eventBus.publish({
+      id: randomUUID(),
+      type: TaskEventType.USER_ROLE_CHANGED,
+      userId: actorId,
+      occurredAt: new Date().toISOString(),
+      data: {
+        targetUserId: id,
+        targetEmail: before.email,
+        previousRole: before.role,
+        newRole: role,
+      },
+    });
+    return toAdminUserOutput(updated);
   }
 
   async listTeams(
