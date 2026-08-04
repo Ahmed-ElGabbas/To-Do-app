@@ -21,7 +21,17 @@ RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
 
+# Local-disk uploads live here (see STORAGE_DRIVER/UPLOAD_DIR in compose).
+RUN mkdir -p /app/storage && chown -R node:node /app
+
+# Run as the unprivileged `node` user shipped with the base image.
+USER node
+
 EXPOSE 3000
 
-# Apply migrations (compiled CLI, no ts-node needed) then start the API.
-CMD ["sh", "-c", "npm run migration:run:prod && node dist/main.js"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+
+# Migrations are applied by the CI/CD pipeline (see .github/workflows/ci.yml),
+# not inline here, so a failed migration never leaves a half-booted container.
+CMD ["node", "dist/main.js"]

@@ -15,11 +15,23 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   app:
     build:
       context: .
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     environment:
       NODE_ENV: production
@@ -38,7 +50,8 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       STORAGE_DRIVER: local
       UPLOAD_DIR: /app/storage
-      REDIS_URL: ""
+      # BullMQ queue uses Redis when present, else falls back to in-process.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       SMTP_HOST: ""
     ports:
       - "3000:3000"
