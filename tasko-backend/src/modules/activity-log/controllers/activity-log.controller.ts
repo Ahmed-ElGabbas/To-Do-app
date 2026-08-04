@@ -1,13 +1,16 @@
 import { Controller, Get, Query } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { ActivityLogQueryDto } from '../dto/activity-log-query.dto';
 import { ActivityLogQueryService } from '../services/activity-log-query.service';
 
+@ApiTags('activity-log')
 @Controller('users/me/activity')
 export class ActivityLogController {
   constructor(private readonly activityQuery: ActivityLogQueryService) {}
 
+  @ApiOperation({ summary: 'List the authenticated user activity feed' })
   @Get()
   list(
     @CurrentUser() user: AuthenticatedUser,

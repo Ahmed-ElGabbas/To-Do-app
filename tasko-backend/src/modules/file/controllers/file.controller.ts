@@ -9,6 +9,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { FileUploadErrorFilter } from '../filters/file-upload-error.filter';
@@ -42,11 +43,14 @@ function avatarFileFilter(
   callback(null, true);
 }
 
+@ApiTags('files')
 @Controller('files')
 @UseFilters(FileUploadErrorFilter)
 export class FileController {
   constructor(private readonly fileService: FileService) {}
 
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload the authenticated user avatar' })
   @Post('avatar')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -61,11 +65,13 @@ export class FileController {
     return this.fileService.uploadAvatar(user.id, file);
   }
 
+  @ApiOperation({ summary: 'Get the authenticated user avatar URL' })
   @Get('avatar')
   getAvatar(@CurrentUser() user: AuthenticatedUser) {
     return this.fileService.getAvatar(user.id);
   }
 
+  @ApiOperation({ summary: 'Delete the authenticated user avatar' })
   @Delete('avatar')
   deleteAvatar(@CurrentUser() user: AuthenticatedUser) {
     return this.fileService.deleteAvatar(user.id);

@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '../../../common/constants/role.enum';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -12,16 +13,19 @@ import { AdminService } from '../services/admin.service';
  * Platform administration. Every route requires the ADMIN role via the
  * class-level @Roles() (enforced by the global RolesGuard).
  */
+@ApiTags('admin')
 @Controller('admin')
 @Roles(Role.ADMIN)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
+  @ApiOperation({ summary: 'Platform stats (admin only)' })
   @Get('stats')
   stats() {
     return this.adminService.stats();
   }
 
+  @ApiOperation({ summary: 'List users (admin only)' })
   @Get('users')
   listUsers(@Query() query: AdminListQueryDto) {
     return this.adminService.listUsers(
@@ -31,11 +35,13 @@ export class AdminController {
     );
   }
 
+  @ApiOperation({ summary: 'Get a user (admin only)' })
   @Get('users/:id')
   getUser(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.getUser(id);
   }
 
+  @ApiOperation({ summary: 'Update a user role (admin only)' })
   @Patch('users/:id')
   updateUserRole(
     @CurrentUser() actor: AuthenticatedUser,
@@ -45,6 +51,7 @@ export class AdminController {
     return this.adminService.updateRole(actor.id, id, dto.role);
   }
 
+  @ApiOperation({ summary: 'List teams (admin only)' })
   @Get('teams')
   listTeams(@Query() query: AdminListQueryDto) {
     return this.adminService.listTeams(
@@ -54,6 +61,7 @@ export class AdminController {
     );
   }
 
+  @ApiOperation({ summary: 'Get a team (admin only)' })
   @Get('teams/:id')
   getTeam(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.getTeam(id);

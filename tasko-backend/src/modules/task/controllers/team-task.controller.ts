@@ -9,6 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { TeamRole } from '../../../common/constants/team-role.enum';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { RequireTeamRole } from '../../../common/decorators/require-team-role.decorator';
 import { ParseUUIDPipe } from '../../../common/pipes/parse-uuid.pipe';
@@ -26,6 +27,7 @@ import { TaskService } from '../services/task.service';
  * or higher. The caller's team role is resolved by the guard, never re-read
  * by the service.
  */
+@ApiTags('team-tasks')
 @Controller('teams/:teamId/tasks')
 export class TeamTaskController {
   constructor(
@@ -33,6 +35,7 @@ export class TeamTaskController {
     private readonly taskQuery: TaskQueryService,
   ) {}
 
+  @ApiOperation({ summary: 'List team tasks' })
   @Get()
   @RequireTeamRole()
   list(
@@ -42,6 +45,7 @@ export class TeamTaskController {
     return this.taskQuery.listForTeam(teamId, query);
   }
 
+  @ApiOperation({ summary: 'Create a team task (editor or owner)' })
   @Post()
   @RequireTeamRole(TeamRole.EDITOR)
   create(
@@ -52,6 +56,7 @@ export class TeamTaskController {
     return this.taskService.createInTeam(teamId, user.id, dto);
   }
 
+  @ApiOperation({ summary: 'Get a team task' })
   @Get(':id')
   @RequireTeamRole()
   get(
@@ -61,6 +66,7 @@ export class TeamTaskController {
     return this.taskQuery.getTeam(teamId, id);
   }
 
+  @ApiOperation({ summary: 'Update a team task (editor or owner)' })
   @Patch(':id')
   @RequireTeamRole(TeamRole.EDITOR)
   update(
@@ -72,6 +78,9 @@ export class TeamTaskController {
     return this.taskService.updateInTeam(teamId, user.id, id, dto);
   }
 
+  @ApiOperation({
+    summary: 'Toggle done state of a team task (editor or owner)',
+  })
   @Patch(':id/done')
   @RequireTeamRole(TeamRole.EDITOR)
   toggleDone(
@@ -83,6 +92,7 @@ export class TeamTaskController {
     return this.taskService.toggleDoneInTeam(teamId, user.id, id, dto.isDone);
   }
 
+  @ApiOperation({ summary: 'Delete a team task (editor or owner)' })
   @Delete(':id')
   @RequireTeamRole(TeamRole.EDITOR)
   remove(

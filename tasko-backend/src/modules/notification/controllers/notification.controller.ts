@@ -9,6 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ParseUUIDPipe } from '../../../common/pipes/parse-uuid.pipe';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { NotificationQueryDto } from '../dto/notification-query.dto';
@@ -17,6 +18,7 @@ import { RevokeDeviceDto } from '../dto/revoke-device.dto';
 import { DeviceTokenService } from '../services/device-token.service';
 import { NotificationService } from '../services/notification.service';
 
+@ApiTags('notifications')
 @Controller('notifications')
 export class NotificationController {
   constructor(
@@ -24,6 +26,7 @@ export class NotificationController {
     private readonly devices: DeviceTokenService,
   ) {}
 
+  @ApiOperation({ summary: 'List notifications' })
   @Get()
   list(
     @CurrentUser() user: AuthenticatedUser,
@@ -32,6 +35,7 @@ export class NotificationController {
     return this.notifications.list(user.id, query);
   }
 
+  @ApiOperation({ summary: 'Mark a notification as read' })
   @Patch(':id/read')
   markRead(
     @CurrentUser() user: AuthenticatedUser,
@@ -40,16 +44,19 @@ export class NotificationController {
     return this.notifications.markRead(user.id, id);
   }
 
+  @ApiOperation({ summary: 'Mark all notifications as read' })
   @Post('read-all')
   markAllRead(@CurrentUser() user: AuthenticatedUser) {
     return this.notifications.markAllRead(user.id);
   }
 
+  @ApiOperation({ summary: 'List registered devices' })
   @Get('devices')
   listDevices(@CurrentUser() user: AuthenticatedUser) {
     return this.devices.list(user.id);
   }
 
+  @ApiOperation({ summary: 'Register a push notification device' })
   @Post('devices')
   registerDevice(
     @CurrentUser() user: AuthenticatedUser,
@@ -58,6 +65,7 @@ export class NotificationController {
     return this.devices.register(user.id, dto);
   }
 
+  @ApiOperation({ summary: 'Revoke a push notification device' })
   @Delete('devices')
   revokeDevice(
     @CurrentUser() user: AuthenticatedUser,

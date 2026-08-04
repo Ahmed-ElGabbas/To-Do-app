@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TeamRole } from '../../../common/constants/team-role.enum';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Public } from '../../../common/decorators/public.decorator';
@@ -14,10 +15,12 @@ import { InvitationService } from '../services/invitation.service';
  * `teams/:teamId` routes are guarded by TeamMembershipGuard; the token routes
  * are `@Public` because the high-entropy token itself is the credential.
  */
+@ApiTags('invitations')
 @Controller()
 export class InvitationController {
   constructor(private readonly invitationService: InvitationService) {}
 
+  @ApiOperation({ summary: 'Create a team invitation (owner only)' })
   @Post('teams/:teamId/invitations')
   @RequireTeamRole(TeamRole.OWNER)
   create(
@@ -28,12 +31,14 @@ export class InvitationController {
     return this.invitationService.create(teamId, user.id, dto);
   }
 
+  @ApiOperation({ summary: 'List team invitations (owner only)' })
   @Get('teams/:teamId/invitations')
   @RequireTeamRole(TeamRole.OWNER)
   list(@Param('teamId', ParseUUIDPipe) teamId: string) {
     return this.invitationService.listByTeam(teamId);
   }
 
+  @ApiOperation({ summary: 'Revoke a team invitation (owner only)' })
   @Delete('teams/:teamId/invitations/:id')
   @RequireTeamRole(TeamRole.OWNER)
   revoke(
@@ -43,18 +48,21 @@ export class InvitationController {
     return this.invitationService.revoke(teamId, id);
   }
 
+  @ApiOperation({ summary: 'Resolve an invitation by token (public)' })
   @Get('invitations/:token')
   @Public()
   get(@Param('token') token: string) {
     return this.invitationService.getByToken(token);
   }
 
+  @ApiOperation({ summary: 'Accept an invitation by token (public)' })
   @Post('invitations/:token/accept')
   @Public()
   accept(@Param('token') token: string, @Body() dto: AcceptInvitationDto) {
     return this.invitationService.accept(token, dto);
   }
 
+  @ApiOperation({ summary: 'Decline an invitation by token (public)' })
   @Post('invitations/:token/decline')
   @Public()
   decline(@Param('token') token: string) {
