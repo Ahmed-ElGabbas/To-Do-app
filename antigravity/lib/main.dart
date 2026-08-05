@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/core/theme/app_theme.dart';
 import 'package:tasko/features/todo/data/datasources/local_data_source.dart';
 import 'package:tasko/features/todo/data/repositories/task_repository_impl.dart';
@@ -29,6 +30,24 @@ void main() async {
 
   // Init notifications (best-effort)
   await NotificationService.init();
+
+  // Build the network layer and wire the silent token refresh flow.
+  AppServices.instance = AppServices();
+  AppServices.instance.apiClient.refreshCallback = () async {
+    final refreshToken = await AppServices.instance.tokenStore.readRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) {
+      throw StateError('No refresh token');
+    }
+    final tokens = await AppServices.instance.authApi.refresh(refreshToken);
+    await AppServices.instance.tokenStore.write(
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    );
+    return (accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
+  };
+  AppServices.instance.apiClient.onSessionExpired = () async {
+    await AppServices.instance.tokenStore.clear();
+  };
 
   // Wire Clean Architecture dependencies
   final localDataSource = LocalDataSource(LocalStorageService());

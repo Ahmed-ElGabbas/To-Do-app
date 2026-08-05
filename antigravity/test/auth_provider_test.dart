@@ -1,467 +1,445 @@
-import 'package:flutter/services.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tasko/core/utils/password_hasher.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
-import 'package:tasko/features/todo/data/models/task_model.dart';
-import 'package:tasko/shared/services/local_storage_service.dart';
+
+import 'core/network/test_services.dart';
+
+Map<String, dynamic> userJson({
+  String id = 'user-1',
+  String email = 'test@test.com',
+  String firstName = 'Test',
+  String lastName = 'User',
+  String role = 'USER',
+  bool isEmailVerified = false,
+}) =>
+    {
+      'id': id,
+      'email': email,
+      'firstName': firstName,
+      'lastName': lastName,
+      'role': role,
+      'isEmailVerified': isEmailVerified,
+      'createdAt': '2025-01-01T00:00:00.000Z',
+    };
+
+Map<String, dynamic> profileJson({
+  String id = 'user-1',
+  String email = 'test@test.com',
+  String firstName = 'Test',
+  String lastName = 'User',
+  String role = 'USER',
+  bool isEmailVerified = false,
+}) =>
+    {
+      ...userJson(
+        id: id,
+        email: email,
+        firstName: firstName,
+        lastName: lastName,
+        role: role,
+        isEmailVerified: isEmailVerified,
+      ),
+      'updatedAt': '2025-01-01T00:00:00.000Z',
+    };
+
+Map<String, dynamic> authResultJson({
+  String id = 'user-1',
+  String email = 'test@test.com',
+  String firstName = 'Test',
+  String lastName = 'User',
+  String role = 'USER',
+  bool isEmailVerified = false,
+}) =>
+    {
+      'user': userJson(
+        id: id,
+        email: email,
+        firstName: firstName,
+        lastName: lastName,
+        role: role,
+        isEmailVerified: isEmailVerified,
+      ),
+      'tokens': {'accessToken': 'access-1', 'refreshToken': 'refresh-1'},
+    };
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  late AuthProvider auth;
-  final secureStorage = <String, String>{};
+  group('loadUser', () {
+    test('signs the user out when no refresh token is stored', () async {
+      final backend = TestBackend(
+          (options, attempt) => throw StateError('no request expected'));
+      final auth = AuthProvider(services: backend.services);
 
-  Future<void> setupAuth({
-    Map<String, Object> sharedPrefs = const {},
-    Map<String, String> securePrefs = const {},
-  }) async {
-    secureStorage.clear();
-    secureStorage.addAll(securePrefs);
+      await auth.loadUser();
 
-    SharedPreferences.setMockInitialValues(sharedPrefs.cast<String, Object>());
-    await LocalStorageService().init();
+      expect(auth.isLoggedIn, isFalse);
+      expect(auth.isRestoring, isFalse);
+    });
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-    for (final entry in sharedPrefs.entries) {
-      final v = entry.value;
-      if (v is String) {
-        await prefs.setString(entry.key, v);
-      } else if (v is bool) {
-        await prefs.setBool(entry.key, v);
-      } else if (v is int) {
-        await prefs.setInt(entry.key, v);
-      } else if (v is double) {
-        await prefs.setDouble(entry.key, v);
-      }
-    }
-
-    auth = AuthProvider();
-    await auth.loadUser();
-  }
-
-  setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
-      (MethodCall methodCall) async {
-        switch (methodCall.method) {
-          case 'read':
-            final key = methodCall.arguments['key'] as String;
-            return secureStorage[key];
-          case 'write':
-            final key = methodCall.arguments['key'] as String;
-            final value = methodCall.arguments['value'] as String;
-            secureStorage[key] = value;
-            return null;
-          case 'delete':
-            final key = methodCall.arguments['key'] as String;
-            secureStorage.remove(key);
-            return null;
-          case 'readAll':
-            return Map<String, String>.from(secureStorage);
-          case 'deleteAll':
-            secureStorage.clear();
-            return null;
-          case 'containsKey':
-            final key = methodCall.arguments['key'] as String;
-            return secureStorage.containsKey(key);
+    test('restores a valid session from the stored refresh token', () async {
+      final backend = TestBackend((options, attempt) {
+        switch ('${options.method} ${options.path}') {
+          case 'GET /auth/me':
+            return ok(userJson());
+          case 'GET /users/me':
+            return ok(profileJson());
           default:
-            return null;
+            throw StateError('unexpected ${options.method} ${options.path}');
         }
-      },
-    );
+      });
+      backend.storage.accessToken = 'access-1';
+      backend.storage.refreshToken = 'refresh-1';
+      final auth = AuthProvider(services: backend.services);
+
+      await auth.loadUser();
+
+      expect(auth.isLoggedIn, isTrue);
+      expect(auth.isRestoring, isFalse);
+      expect(auth.email, 'test@test.com');
+      expect(auth.name, 'Test User');
+      expect(auth.profile, isNotNull);
+    });
+
+    test('signs out when the backend rejects the session', () async {
+      final backend = TestBackend(
+          (options, attempt) => failResponse('UNAUTHORIZED', 'Token expired',
+              status: 401));
+      backend.storage.refreshToken = 'refresh-1';
+      final auth = AuthProvider(services: backend.services);
+
+      await auth.loadUser();
+
+      expect(auth.isLoggedIn, isFalse);
+      expect(auth.isRestoring, isFalse);
+    });
   });
 
-  group('fresh install', () {
-    setUp(() async {
-      await setupAuth();
-    });
+  group('login', () {
+    test('succeeds, persists tokens and populates the user', () async {
+      final backend = TestBackend((options, attempt) {
+        expect(options.method, 'POST');
+        expect(options.path, '/auth/login');
+        return ok(authResultJson());
+      });
+      final auth = AuthProvider(services: backend.services);
 
-    test('signUp stores hash + salt, never raw password', () async {
-      final result = await auth.signUp(
-        name: 'Test User',
-        email: 'test@test.com',
-        password: 'mypassword',
-      );
-
-      expect(result, isTrue);
-      expect(secureStorage.containsKey('auth_password'), isFalse);
-      expect(secureStorage.containsKey('auth_password_hash'), isTrue);
-      expect(secureStorage.containsKey('auth_password_salt'), isTrue);
-    });
-
-    test('login with correct password succeeds', () async {
-      await auth.signUp(
-        name: 'Test User',
-        email: 'test@test.com',
-        password: 'mypassword',
-      );
-
-      final result = await auth.login(
-        email: 'test@test.com',
-        password: 'mypassword',
-      );
+      final result =
+          await auth.login(email: 'test@test.com', password: 'secret');
 
       expect(result, isTrue);
       expect(auth.isLoggedIn, isTrue);
+      expect(auth.user?.email, 'test@test.com');
+      expect(auth.name, 'Test User');
+      expect(backend.storage.accessToken, 'access-1');
+      expect(backend.storage.refreshToken, 'refresh-1');
     });
 
-    test('login with wrong password fails', () async {
-      await auth.signUp(
-        name: 'Test User',
-        email: 'test@test.com',
-        password: 'mypassword',
+    test('fails on invalid credentials', () async {
+      final backend = TestBackend((options, attempt) =>
+          failResponse('INVALID_CREDENTIALS', 'Invalid credentials', status: 401));
+      final auth = AuthProvider(services: backend.services);
+
+      final result =
+          await auth.login(email: 'test@test.com', password: 'wrong');
+
+      expect(result, isFalse);
+      expect(auth.isLoggedIn, isFalse);
+      expect(auth.errorMessage, isNotNull);
+    });
+  });
+
+  group('signUp', () {
+    test('splits the display name and stores local extras', () async {
+      RequestOptions? captured;
+      final backend = TestBackend((options, attempt) {
+        captured = options;
+        return ok(authResultJson(
+          email: 'jane@test.com',
+          firstName: 'Jane',
+          lastName: 'Doe',
+        ));
+      });
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.signUp(
+        name: 'Jane Doe',
+        email: 'jane@test.com',
+        password: 'secret',
+        phone: '123',
+        country: 'US',
+        bio: 'hello',
       );
 
-      final result = await auth.login(
-        email: 'test@test.com',
-        password: 'wrongpassword',
-      );
-
-      expect(result, isFalse, reason: 'wrong password should not match');
+      expect(result, isTrue);
+      expect(captured!.data, {
+        'email': 'jane@test.com',
+        'password': 'secret',
+        'firstName': 'Jane',
+        'lastName': 'Doe',
+      });
+      expect(auth.isLoggedIn, isTrue);
+      expect(auth.phone, '123');
+      expect(auth.country, 'US');
+      expect(auth.bio, 'hello');
     });
 
-    test('login with wrong email fails', () async {
-      await auth.signUp(
-        name: 'Test User',
-        email: 'test@test.com',
-        password: 'mypassword',
+    test('a single-word name becomes the first name', () async {
+      RequestOptions? captured;
+      final backend = TestBackend((options, attempt) {
+        captured = options;
+        return ok(authResultJson(firstName: 'Jane', lastName: ''));
+      });
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.signUp(
+        name: 'Jane',
+        email: 'jane@test.com',
+        password: 'secret',
       );
 
-      final result = await auth.login(
-        email: 'other@test.com',
-        password: 'mypassword',
+      expect(result, isTrue);
+      expect(captured!.data['firstName'], 'Jane');
+      expect(captured!.data['lastName'], '');
+    });
+
+    test('fails and surfaces the server message', () async {
+      final backend = TestBackend((options, attempt) =>
+          failResponse('VALIDATION_ERROR', 'Email already registered', status: 409));
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.signUp(
+        name: 'Jane Doe',
+        email: 'jane@test.com',
+        password: 'secret',
       );
 
       expect(result, isFalse);
+      expect(auth.isLoggedIn, isFalse);
+      expect(auth.errorMessage, isNotNull);
+    });
+  });
+
+  group('logout', () {
+    test('clears the session and revokes the refresh token', () async {
+      final requests = <String>[];
+      final backend = TestBackend((options, attempt) {
+        requests.add('${options.method} ${options.path}');
+        return ok(null);
+      });
+      backend.storage.accessToken = 'access-1';
+      backend.storage.refreshToken = 'refresh-1';
+      final auth = AuthProvider(services: backend.services);
+
+      await auth.logout();
+
+      expect(requests, ['POST /auth/logout']);
+      expect(backend.storage.accessToken, isNull);
+      expect(backend.storage.refreshToken, isNull);
+      expect(auth.isLoggedIn, isFalse);
+    });
+
+    test('a failed backend revocation is ignored', () async {
+      final backend = TestBackend((options, attempt) =>
+          failResponse('UNAUTHORIZED', 'Token expired', status: 401));
+      backend.storage.refreshToken = 'refresh-1';
+      final auth = AuthProvider(services: backend.services);
+
+      await auth.logout();
+
+      expect(auth.isLoggedIn, isFalse);
+      expect(backend.storage.refreshToken, isNull);
     });
   });
 
   group('changePassword', () {
-    setUp(() async {
-      await setupAuth();
-      await auth.signUp(
-        name: 'Test User',
-        email: 'test@test.com',
-        password: 'oldpassword',
-      );
-    });
+    test('succeeds when the current password matches', () async {
+      RequestOptions? captured;
+      final backend = TestBackend((options, attempt) {
+        captured = options;
+        return ok(null);
+      });
+      final auth = AuthProvider(services: backend.services);
 
-    test('succeeds with correct old password', () async {
       final result = await auth.changePassword(
-        oldPassword: 'oldpassword',
-        newPassword: 'newpassword',
+        oldPassword: 'old',
+        newPassword: 'new',
       );
 
       expect(result, isTrue);
+      expect(captured!.method, 'PATCH');
+      expect(captured!.path, '/auth/change-password');
+      expect(captured!.data,
+          {'currentPassword': 'old', 'newPassword': 'new'});    });
 
-      final loginWithOld = await auth.login(
-        email: 'test@test.com',
-        password: 'oldpassword',
-      );
-      expect(loginWithOld, isFalse);
+    test('fails with an incorrect current password', () async {
+      final backend = TestBackend((options, attempt) =>
+          failResponse('UNAUTHORIZED', 'Invalid password', status: 401));
+      final auth = AuthProvider(services: backend.services);
 
-      final loginWithNew = await auth.login(
-        email: 'test@test.com',
-        password: 'newpassword',
-      );
-      expect(loginWithNew, isTrue);
-    });
-
-    test('fails with incorrect old password', () async {
       final result = await auth.changePassword(
-        oldPassword: 'wrongpassword',
-        newPassword: 'newpassword',
+        oldPassword: 'wrong',
+        newPassword: 'new',
       );
 
       expect(result, isFalse);
-
-      final loginWithOld = await auth.login(
-        email: 'test@test.com',
-        password: 'oldpassword',
-      );
-      expect(loginWithOld, isTrue);
-    });
-  });
-
-  group('resetPassword', () {
-    setUp(() async {
-      await setupAuth();
-      await auth.signUp(
-        name: 'Test User',
-        email: 'test@test.com',
-        password: 'oldpassword',
-      );
-    });
-
-    test('succeeds with the registered email and updates in-memory state', () async {
-      final result = await auth.resetPassword(
-        email: 'test@test.com',
-        newPassword: 'newpassword',
-      );
-
-      expect(result, isTrue);
-
-      final loginWithOld = await auth.login(
-        email: 'test@test.com',
-        password: 'oldpassword',
-      );
-      expect(loginWithOld, isFalse);
-
-      final loginWithNew = await auth.login(
-        email: 'test@test.com',
-        password: 'newpassword',
-      );
-      expect(loginWithNew, isTrue);
-    });
-
-    test('persists the new password across a full reload', () async {
-      await auth.resetPassword(
-        email: 'test@test.com',
-        newPassword: 'newpassword',
-      );
-
-      auth = AuthProvider();
-      await auth.loadUser();
-
-      final loginWithNew = await auth.login(
-        email: 'test@test.com',
-        password: 'newpassword',
-      );
-      expect(loginWithNew, isTrue);
-
-      final loginWithOld = await auth.login(
-        email: 'test@test.com',
-        password: 'oldpassword',
-      );
-      expect(loginWithOld, isFalse);
-    });
-
-    test('fails with a non-matching email and leaves password unchanged', () async {
-      final result = await auth.resetPassword(
-        email: 'other@test.com',
-        newPassword: 'newpassword',
-      );
-
-      expect(result, isFalse);
-
-      final loginWithOld = await auth.login(
-        email: 'test@test.com',
-        password: 'oldpassword',
-      );
-      expect(loginWithOld, isTrue);
-    });
-
-    test('fails when no account exists on the device', () async {
-      await setupAuth();
-
-      final result = await auth.resetPassword(
-        email: 'nobody@test.com',
-        newPassword: 'newpassword',
-      );
-
-      expect(result, isFalse);
+      expect(auth.errorMessage, isNotNull);
     });
   });
 
   group('changeEmail', () {
-    setUp(() async {
-      await setupAuth();
-      await auth.signUp(
-        name: 'Test User',
-        email: 'old@test.com',
-        password: 'mypassword',
-      );
-    });
+    test('updates the email and clears the verified flag', () async {
+      final backend = TestBackend((options, attempt) {
+        switch ('${options.method} ${options.path}') {
+          case 'POST /auth/login':
+            return ok(authResultJson(isEmailVerified: true));
+          case 'PATCH /auth/change-email':
+            return ok(null);
+          default:
+            throw StateError('unexpected ${options.method} ${options.path}');
+        }
+      });
+      final auth = AuthProvider(services: backend.services);
+      await auth.login(email: 'test@test.com', password: 'secret');
 
-    test('succeeds with correct password', () async {
       final result = await auth.changeEmail(
-        currentPassword: 'mypassword',
+        currentPassword: 'secret',
         newEmail: 'new@test.com',
       );
 
       expect(result, isTrue);
       expect(auth.email, 'new@test.com');
-
-      final loginWithNewEmail = await auth.login(
-        email: 'new@test.com',
-        password: 'mypassword',
-      );
-      expect(loginWithNewEmail, isTrue);
+      expect(auth.isEmailVerified, isFalse);
     });
 
-    test('fails with incorrect password', () async {
+    test('fails and keeps the current email', () async {
+      final backend = TestBackend((options, attempt) {
+        switch ('${options.method} ${options.path}') {
+          case 'POST /auth/login':
+            return ok(authResultJson());
+          case 'PATCH /auth/change-email':
+            return failResponse('UNAUTHORIZED', 'Invalid password', status: 401);
+          default:
+            throw StateError('unexpected ${options.method} ${options.path}');
+        }
+      });
+      final auth = AuthProvider(services: backend.services);
+      await auth.login(email: 'test@test.com', password: 'secret');
+
       final result = await auth.changeEmail(
-        currentPassword: 'wrongpassword',
+        currentPassword: 'wrong',
         newEmail: 'new@test.com',
       );
 
       expect(result, isFalse);
-      expect(auth.email, 'old@test.com');
+      expect(auth.email, 'test@test.com');
+    });
+  });
+
+  group('forgotPassword / resetPassword', () {
+    test('forgotPassword succeeds and sends the email', () async {
+      RequestOptions? captured;
+      final backend = TestBackend((options, attempt) {
+        captured = options;
+        return ok(null);
+      });
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.forgotPassword('test@test.com');
+
+      expect(result, isTrue);
+      expect(captured!.path, '/auth/forgot-password');
+      expect(captured!.data, {'email': 'test@test.com'});
     });
 
-    test('migrates task data to the new email key on success', () async {
-      final task = TaskModel(
-        id: '1',
-        title: 'My task',
-        time: '10:00',
-        date: 'today',
-      );
-      await LocalStorageService().saveTasksForUser('old@test.com', [task]);
+    test('forgotPassword fails for an unknown email', () async {
+      final backend = TestBackend((options, attempt) =>
+          failResponse('RESOURCE_NOT_FOUND', 'Account not found', status: 404));
+      final auth = AuthProvider(services: backend.services);
 
-      final result = await auth.changeEmail(
-        currentPassword: 'mypassword',
-        newEmail: 'new@test.com',
+      final result = await auth.forgotPassword('nobody@test.com');
+
+      expect(result, isFalse);
+      expect(auth.errorMessage, isNotNull);
+    });
+
+    test('resetPassword succeeds with the emailed token', () async {
+      RequestOptions? captured;
+      final backend = TestBackend((options, attempt) {
+        captured = options;
+        return ok(null);
+      });
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.resetPassword(
+        token: 'token-1',
+        newPassword: 'newpass',
       );
 
       expect(result, isTrue);
-      expect(auth.email, 'new@test.com');
-
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('tasks_old@test.com'), isNull,
-          reason: 'old key should be removed after migration');
-      expect(prefs.getString('tasks_new@test.com'), isNotNull,
-          reason: 'tasks should be reachable under the new email key');
-
-      final migrated = LocalStorageService().loadTasksForUser('new@test.com');
-      expect(migrated.length, 1);
-      expect(migrated[0].title, 'My task');
+      expect(captured!.path, '/auth/reset-password');
+      expect(captured!.data, {'token': 'token-1', 'newPassword': 'newpass'});
     });
 
-    test('does not migrate task data when the current password is wrong',
-        () async {
-      final task = TaskModel(
-        id: '1',
-        title: 'Keep me',
-        time: '10:00',
-        date: 'today',
-      );
-      await LocalStorageService().saveTasksForUser('old@test.com', [task]);
+    test('resetPassword fails with an invalid token', () async {
+      final backend = TestBackend(
+          (options, attempt) => failResponse('VALIDATION_ERROR', 'Bad token',
+              status: 400));
+      final auth = AuthProvider(services: backend.services);
 
-      final result = await auth.changeEmail(
-        currentPassword: 'wrongpassword',
-        newEmail: 'new@test.com',
+      final result = await auth.resetPassword(
+        token: 'bad-token',
+        newPassword: 'newpass',
       );
 
       expect(result, isFalse);
-
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('tasks_old@test.com'), isNotNull,
-          reason: 'tasks stay under the old key');
-      expect(prefs.getString('tasks_new@test.com'), isNull,
-          reason: 'no migration should occur on a failed email change');
     });
   });
 
-  group('legacy migration', () {
-    test('migrates SharedPreferences plaintext to hash+salt', () async {
-      await setupAuth(
-        sharedPrefs: {
-          'auth_is_logged_in': true,
-          'auth_name': 'Legacy User',
-          'auth_email': 'legacy@test.com',
-          'auth_password': 'legacyplaintext',
-        },
-      );
+  group('updateProfile', () {
+    test('updates names and local extras', () async {
+      final backend = TestBackend((options, attempt) {
+        switch ('${options.method} ${options.path}') {
+          case 'POST /auth/login':
+            return ok(authResultJson());
+          case 'PATCH /users/me':
+            return ok(profileJson(firstName: 'New', lastName: 'Name'));
+          default:
+            throw StateError('unexpected ${options.method} ${options.path}');
+        }
+      });
+      final auth = AuthProvider(services: backend.services);
+      await auth.login(email: 'test@test.com', password: 'secret');
 
-      expect(secureStorage.containsKey('auth_password'), isFalse);
-      expect(secureStorage.containsKey('auth_password_hash'), isTrue);
-      expect(secureStorage.containsKey('auth_password_salt'), isTrue);
+      final result = await auth.updateProfile(name: 'New Name', bio: 'Hi');
 
-      final loginResult = await auth.login(
-        email: 'legacy@test.com',
-        password: 'legacyplaintext',
-      );
-      expect(loginResult, isTrue);
+      expect(result, isTrue);
+      expect(auth.name, 'New Name');
+      expect(auth.bio, 'Hi');
     });
 
-    test('migrates unsalted secure-storage password to hash+salt', () async {
-      await setupAuth(
-        sharedPrefs: {
-          'auth_is_logged_in': true,
-          'auth_name': 'PreFix User',
-          'auth_email': 'prefix@test.com',
-        },
-        securePrefs: {
-          'auth_password': 'prefixplaintext',
-        },
-      );
+    test('fails when the backend rejects the update', () async {
+      final backend = TestBackend((options, attempt) => failResponse(
+          'VALIDATION_ERROR', 'Invalid profile', status: 422));
+      final auth = AuthProvider(services: backend.services);
 
-      expect(secureStorage.containsKey('auth_password'), isFalse);
-      expect(secureStorage.containsKey('auth_password_hash'), isTrue);
-      expect(secureStorage.containsKey('auth_password_salt'), isTrue);
+      final result = await auth.updateProfile(name: 'New Name');
 
-      final loginResult = await auth.login(
-        email: 'prefix@test.com',
-        password: 'prefixplaintext',
-      );
-      expect(loginResult, isTrue);
-    });
-
-    test('migrates through both layers (SharedPreferences → secure → hash)',
-        () async {
-      await setupAuth(
-        sharedPrefs: {
-          'auth_is_logged_in': true,
-          'auth_name': 'Double Legacy',
-          'auth_email': 'double@test.com',
-          'auth_password': 'doubleplaintext',
-        },
-      );
-
-      expect(secureStorage.containsKey('auth_password'), isFalse);
-      expect(secureStorage.containsKey('auth_password_hash'), isTrue);
-      expect(secureStorage.containsKey('auth_password_salt'), isTrue);
-
-      final loginResult = await auth.login(
-        email: 'double@test.com',
-        password: 'doubleplaintext',
-      );
-      expect(loginResult, isTrue);
+      expect(result, isFalse);
+      expect(auth.errorMessage, isNotNull);
     });
   });
 
-  group('updateProfile preserves password', () {
-    setUp(() async {
-      await setupAuth();
-      await auth.signUp(
-        name: 'Test User',
-        email: 'test@test.com',
-        password: 'mypassword',
-      );
-    });
+  group('role', () {
+    test('exposes admin status from the role field', () async {
+      final backend = TestBackend((options, attempt) =>
+          ok(authResultJson(role: 'ADMIN')));
+      final auth = AuthProvider(services: backend.services);
 
-    test('password still works after profile update', () async {
-      await auth.updateProfile(name: 'Updated Name');
+      await auth.login(email: 'admin@test.com', password: 'secret');
 
-      final loginResult = await auth.login(
-        email: 'test@test.com',
-        password: 'mypassword',
-      );
-      expect(loginResult, isTrue);
-      expect(auth.name, 'Updated Name');
-    });
-  });
-
-  group('password_hasher utility', () {
-    test('generateSalt produces different values each time', () {
-      final salt1 = generateSalt();
-      final salt2 = generateSalt();
-      expect(salt1, isNot(equals(salt2)));
-    });
-
-    test('hashPassword produces deterministic results', () {
-      final hash1 = hashPassword('mypassword', 'mysalt');
-      final hash2 = hashPassword('mypassword', 'mysalt');
-      expect(hash1, equals(hash2));
-    });
-
-    test('different salts produce different hashes for same password', () {
-      final hash1 = hashPassword('mypassword', 'salt1');
-      final hash2 = hashPassword('mypassword', 'salt2');
-      expect(hash1, isNot(equals(hash2)));
+      expect(auth.isAdmin, isTrue);
+      expect(auth.role, 'ADMIN');
     });
   });
 }

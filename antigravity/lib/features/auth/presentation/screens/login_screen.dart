@@ -68,7 +68,9 @@ class _LoginScreenState extends State<LoginScreen> {
         (route) => false,
       );
     } else {
-      setState(() => _errorMessage = l10n.get('invalid_credentials'));
+      setState(
+        () => _errorMessage = auth.errorMessage ?? l10n.get('invalid_credentials'),
+      );
     }
   }
 
@@ -260,19 +262,14 @@ class _ResetPasswordDialog extends StatefulWidget {
 
 class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _emailController = TextEditingController(text: widget.initialEmail);
-  final _newPasswordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-  bool _obscureNewPassword = true;
-  bool _obscureConfirmPassword = true;
+  late final TextEditingController _emailController =
+      TextEditingController(text: widget.initialEmail);
   bool _isLoading = false;
   String? _errorMessage;
 
   @override
   void dispose() {
     _emailController.dispose();
-    _newPasswordController.dispose();
-    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -280,18 +277,6 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
     if (value == null || value.trim().isEmpty) return l10n.get('field_required');
     final emailRegex = RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$');
     if (!emailRegex.hasMatch(value.trim())) return l10n.get('invalid_email');
-    return null;
-  }
-
-  String? _validatePassword(String? value, AppLocalizations l10n) {
-    if (value == null || value.isEmpty) return l10n.get('field_required');
-    if (value.length < 6) return l10n.get('password_too_short');
-    return null;
-  }
-
-  String? _validateConfirm(String? value, AppLocalizations l10n) {
-    if (value == null || value.isEmpty) return l10n.get('field_required');
-    if (value != _newPasswordController.text) return l10n.get('password_mismatch');
     return null;
   }
 
@@ -303,16 +288,13 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
     });
     final l10n = AppLocalizations.of(context);
     final auth = context.read<AuthProvider>();
-    final success = await auth.resetPassword(
-      email: _emailController.text.trim(),
-      newPassword: _newPasswordController.text,
-    );
+    final success = await auth.forgotPassword(_emailController.text.trim());
     if (!mounted) return;
     setState(() => _isLoading = false);
     if (success) {
       Navigator.of(context).pop(true);
     } else {
-      setState(() => _errorMessage = l10n.get('account_not_found'));
+      setState(() => _errorMessage = auth.errorMessage ?? l10n.get('account_not_found'));
     }
   }
 
@@ -337,44 +319,28 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
                 style: AppTextStyles.bodySmall.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
               ),
               const SizedBox(height: AppSizes.md),
-              _buildField(
-                theme: theme,
-                l10n: l10n,
-                label: l10n.get('email'),
-                hint: l10n.get('email_hint'),
+              Text(
+                l10n.get('email'),
+                style: AppTextStyles.labelLarge.copyWith(color: theme.colorScheme.onSurface),
+              ),
+              const SizedBox(height: AppSizes.sm),
+              TextFormField(
                 controller: _emailController,
-                icon: Icons.email_outlined,
-                keyboardType: TextInputType.emailAddress,
                 validator: (v) => _validateEmail(v, l10n),
-              ),
-              const SizedBox(height: AppSizes.md),
-              _buildField(
-                theme: theme,
-                l10n: l10n,
-                label: l10n.get('new_password'),
-                hint: l10n.get('password_hint'),
-                controller: _newPasswordController,
-                icon: Icons.lock_outline_rounded,
-                obscureText: _obscureNewPassword,
-                validator: (v) => _validatePassword(v, l10n),
-                suffix: IconButton(
-                  icon: Icon(_obscureNewPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: theme.primaryColor, size: AppSizes.iconMd),
-                  onPressed: () => setState(() => _obscureNewPassword = !_obscureNewPassword),
-                ),
-              ),
-              const SizedBox(height: AppSizes.md),
-              _buildField(
-                theme: theme,
-                l10n: l10n,
-                label: l10n.get('confirm_new_password'),
-                hint: l10n.get('password_hint'),
-                controller: _confirmPasswordController,
-                icon: Icons.lock_outline_rounded,
-                obscureText: _obscureConfirmPassword,
-                validator: (v) => _validateConfirm(v, l10n),
-                suffix: IconButton(
-                  icon: Icon(_obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: theme.primaryColor, size: AppSizes.iconMd),
-                  onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                keyboardType: TextInputType.emailAddress,
+                style: GoogleFonts.poppins(fontSize: 14, color: theme.colorScheme.onSurface),
+                decoration: InputDecoration(
+                  hintText: l10n.get('email_hint'),
+                  hintStyle: GoogleFonts.poppins(color: theme.colorScheme.onSurface.withValues(alpha: 0.4), fontSize: 14),
+                  filled: true,
+                  fillColor: theme.colorScheme.surface,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.md),
+                  prefixIcon: Icon(Icons.email_outlined, color: theme.primaryColor, size: AppSizes.iconMd),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.dividerColor)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.dividerColor)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.primaryColor, width: 2)),
+                  errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: const BorderSide(color: Colors.redAccent)),
+                  focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: const BorderSide(color: Colors.redAccent, width: 2)),
                 ),
               ),
               if (_errorMessage != null) ...[
@@ -403,49 +369,7 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
           ),
           child: _isLoading
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : Text(l10n.get('confirm'), style: AppTextStyles.labelLarge.copyWith(color: Colors.white)),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildField({
-    required ThemeData theme,
-    required AppLocalizations l10n,
-    required String label,
-    required String hint,
-    required TextEditingController controller,
-    required IconData icon,
-    String? Function(String?)? validator,
-    TextInputType keyboardType = TextInputType.text,
-    bool obscureText = false,
-    Widget? suffix,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: AppTextStyles.labelLarge.copyWith(color: theme.colorScheme.onSurface)),
-        const SizedBox(height: AppSizes.sm),
-        TextFormField(
-          controller: controller,
-          validator: validator,
-          keyboardType: keyboardType,
-          obscureText: obscureText,
-          style: GoogleFonts.poppins(fontSize: 14, color: theme.colorScheme.onSurface),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: GoogleFonts.poppins(color: theme.colorScheme.onSurface.withValues(alpha: 0.4), fontSize: 14),
-            filled: true,
-            fillColor: theme.colorScheme.surface,
-            contentPadding: const EdgeInsets.symmetric(horizontal: AppSizes.md, vertical: AppSizes.md),
-            prefixIcon: Icon(icon, color: theme.primaryColor, size: AppSizes.iconMd),
-            suffixIcon: suffix,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.dividerColor)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.dividerColor)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: BorderSide(color: theme.primaryColor, width: 2)),
-            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: const BorderSide(color: Colors.redAccent)),
-            focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppSizes.radiusMd), borderSide: const BorderSide(color: Colors.redAccent, width: 2)),
-          ),
+              : Text(l10n.get('send_reset_link'), style: AppTextStyles.labelLarge.copyWith(color: Colors.white)),
         ),
       ],
     );

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
 import 'package:tasko/features/auth/presentation/screens/login_screen.dart';
 import 'package:tasko/features/todo/data/datasources/local_data_source.dart';
@@ -16,8 +17,12 @@ import 'package:tasko/features/todo/presentation/widgets/main_scaffold.dart';
 import 'package:tasko/main.dart';
 import 'package:tasko/shared/services/local_storage_service.dart';
 
+import 'core/network/test_services.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  late TestBackend backend;
 
   setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
@@ -32,6 +37,35 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     await LocalStorageService().init();
+
+    backend = TestBackend((options, attempt) {
+      switch ('${options.method} ${options.path}') {
+        case 'GET /auth/me':
+          return ok({
+            'id': 'user-1',
+            'email': 'test@test.com',
+            'firstName': 'Test',
+            'lastName': 'User',
+            'role': 'USER',
+            'isEmailVerified': false,
+            'createdAt': '2025-01-01T00:00:00.000Z',
+          });
+        case 'GET /users/me':
+          return ok({
+            'id': 'user-1',
+            'email': 'test@test.com',
+            'firstName': 'Test',
+            'lastName': 'User',
+            'role': 'USER',
+            'isEmailVerified': false,
+            'createdAt': '2025-01-01T00:00:00.000Z',
+            'updatedAt': '2025-01-01T00:00:00.000Z',
+          });
+        default:
+          throw StateError('unexpected ${options.method} ${options.path}');
+      }
+    });
+    AppServices.instance = backend.services;
   });
 
   Widget buildApp() {
@@ -73,12 +107,8 @@ void main() {
 
   testWidgets('splash navigates to the main scaffold when signed in',
       (tester) async {
-    SharedPreferences.setMockInitialValues({
-      'auth_is_logged_in': true,
-      'auth_name': 'Test User',
-      'auth_email': 'test@test.com',
-    });
-    await LocalStorageService().init();
+    backend.storage.accessToken = 'access-1';
+    backend.storage.refreshToken = 'refresh-1';
 
     await tester.pumpWidget(buildApp());
     await tester.pump();

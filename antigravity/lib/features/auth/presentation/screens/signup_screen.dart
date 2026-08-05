@@ -29,6 +29,7 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   String? _profileImagePath;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -83,13 +84,17 @@ class _SignupScreenState extends State<SignupScreen> {
     if (form == null || !form.validate()) {
       return;
     }
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
     final auth = context.read<AuthProvider>();
     final taskProvider = context.read<TaskProvider>();
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
-    await auth.signUp(
+    final l10n = AppLocalizations.of(context);
+    final success = await auth.signUp(
       name: _nameController.text.trim(),
       email: _emailController.text.trim(),
       password: _passwordController.text,
@@ -99,12 +104,15 @@ class _SignupScreenState extends State<SignupScreen> {
       profileImagePath: _profileImagePath ?? '',
     );
 
-    if (mounted) {
-      await taskProvider.loadTasks();
-    }
     if (!mounted) return;
     setState(() => _isLoading = false);
+    if (!success) {
+      setState(() => _errorMessage = auth.errorMessage ?? l10n.get('signup_failed'));
+      return;
+    }
 
+    await taskProvider.loadTasks();
+    if (!mounted) return;
     messenger.showSnackBar(
       const SnackBar(
         content: Text('Account created successfully!'),
@@ -277,6 +285,25 @@ class _SignupScreenState extends State<SignupScreen> {
                   icon: Icons.info_outline_rounded,
                   maxLines: 3,
                 ),
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: AppSizes.md),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSizes.md),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                    ),
+                    child: Text(
+                      _errorMessage!,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: Colors.redAccent,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSizes.xxl),
                 SizedBox(
                   width: double.infinity,

@@ -39,9 +39,11 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    Future.delayed(const Duration(seconds: 2), () {
+    Future.delayed(const Duration(seconds: 2), () async {
       if (!mounted) return;
       final auth = context.read<AuthProvider>();
+      await auth.restorationDone;
+      if (!mounted) return;
       final isLoggedIn = auth.isLoggedIn;
 
       Navigator.of(context).pushReplacement(
