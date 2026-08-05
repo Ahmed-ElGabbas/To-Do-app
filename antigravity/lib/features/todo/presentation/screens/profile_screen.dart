@@ -186,7 +186,9 @@ class _TappableAvatar extends StatelessWidget {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: source, imageQuality: 80);
       if (picked == null) return;
-      if (context.mounted) await context.read<AuthProvider>().updateProfile(profileImagePath: picked.path);
+      if (context.mounted) {
+        await context.read<AuthProvider>().uploadAvatar(File(picked.path));
+      }
     } catch (_) {}
   }
 

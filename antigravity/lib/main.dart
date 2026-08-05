@@ -7,6 +7,11 @@ import 'package:tasko/core/theme/app_theme.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
 import 'package:tasko/features/todo/presentation/state/settings_provider.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
+import 'package:tasko/features/collaboration/state/team_provider.dart';
+import 'package:tasko/features/collaboration/state/notification_provider.dart';
+import 'package:tasko/features/collaboration/state/analytics_provider.dart';
+import 'package:tasko/features/collaboration/state/activity_provider.dart';
+import 'package:tasko/features/collaboration/state/admin_provider.dart';
 import 'package:tasko/features/todo/presentation/screens/splash_screen.dart';
 import 'package:tasko/shared/services/notification_service.dart';
 
@@ -46,6 +51,11 @@ void main() async {
         ChangeNotifierProvider(create: (_) => TaskProvider()..loadTasks()),
         ChangeNotifierProvider(create: (_) => AuthProvider()..loadUser()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()..loadSettings()),
+        ChangeNotifierProvider(create: (_) => TeamProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
+        ChangeNotifierProvider(create: (_) => ActivityProvider()),
+        ChangeNotifierProvider(create: (_) => AdminProvider()),
       ],
       child: const MyApp(),
     ),

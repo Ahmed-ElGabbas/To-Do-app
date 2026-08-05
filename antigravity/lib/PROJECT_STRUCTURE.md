@@ -1,43 +1,54 @@
-# Tasko App — Project Structure & Implementation Guide
+# Tasko — Project Structure & Implementation Guide
 
-> **For Claude Code:** Read this file fully before writing any code. Follow the structure, design system, and conventions below exactly.
+> **For AI coding agents:** Read this file fully before writing code. Follow the
+> architecture, conventions, and response-contract rules below exactly.
 
 ---
 
 ## App Identity
-- **App Name:** Tasko (everywhere — AndroidManifest, Info.plist, UI, AppBar, Splash)
-- **App Slogan:** "Organize your day"
-- **App Icon:** assets/images/app_icon.png (books stack image)
+- **App Name:** Tasko — Flutter client (`antigravity/`) talking to a NestJS API (`tasko-backend/`)
+- **Slogan:** "Organize your day" (en) / "نظّم يومك" (ar) / "Organisez votre journée" (fr)
+- **Icons / branding:** `assets/images/app_icon.png`
+- **Stack:** Flutter 3.41.x / Dart 3.11.x (client) · NestJS + TypeORM + Postgres (backend)
 
 ---
 
-## Implementation Status — All 8 Features Complete ✅
+## Architecture Overview (post Phase 5)
 
-| # | Feature | Status | Key Files |
-|---|---------|--------|-----------|
-| 1 | Splash Screen Icon (app_icon.png) | ✅ Done | `splash_screen.dart` |
-| 2 | Persistent Login (SharedPreferences) | ✅ Done | `auth_provider.dart`, `splash_screen.dart` |
-| 3 | Add Task Works (optimistic UI) | ✅ Done | `task_provider.dart`, `add_task_screen.dart` |
-| 4 | Calendar Add Task with Date | ✅ Done | `calendar_screen.dart`, `add_task_screen.dart` |
-| 5 | Completed Counter (real-time) | ✅ Done | `task_provider.dart`, `home_screen.dart` |
-| 6 | Local Notifications (no Firebase) | ✅ Done | `notification_service.dart`, `AndroidManifest.xml` |
-| 7 | Profile Picture Change | ✅ Done | `profile_screen.dart` |
-| 8 | Flat Task Row Style | ✅ Done | `task_card.dart` |
+The app is **backend-driven**. All task/settings/auth state is synced to the
+NestJS API; `SharedPreferences` is only a cache/fallback for settings and
+local-only profile extras. There is no shared Firebase, and no local-first task
+store anymore.
 
----
+```
+Flutter app ──(Dio, JWT Bearer)──► tasko-backend (NestJS REST API)
+   │                                     │
+   ├─ AuthProvider      (JWT login/signup/session/account)
+   ├─ TaskProvider      (optimistic CRUD, rollback on ApiException)
+   ├─ SettingsProvider  (syncs to /settings, keeps prefs cache)
+   ├─ TeamProvider      (teams + members + invitations)
+   ├─ NotificationProvider
+   ├─ AnalyticsProvider
+   ├─ ActivityProvider
+   └─ AdminProvider     (admin-only)
+```
 
-## Design System
+### Response contract (MUST match the backend)
+- Success: `{ "success": true, "data": T }` — `ApiClient.unwrap()` returns `data`.
+- Void handlers emit **no** `data` field → unwrap returns `null`.
+- `GET /files/avatar` may return `data: null` (no avatar yet).
+- `GET /health` is raw (no envelope) and marked `@SkipTransform()`.
+- Errors: `{ "success": false, "error": { code, message, details?, correlationId } }`
+  → thrown as `ApiException(code, message, details?)`.
+- `ApiClient` uses Dio's **default `validateStatus`** (throws on ≥400) so
+  `AuthInterceptor.onError` drives the 401 → refresh → retry flow. Tests must
+  mirror this (`validateStatus: (_) => true` was tried and reverted).
 
-**Theme:** White & Orange (default), supports Dark Mode
-**Primary Color:** `#FF9F00`
-**Background Light:** `#FFFFFF`
-**Background Dark:** `#1A1A1A`
-**Surface Light:** `#F7F7F7`
-**Surface Dark:** `#2A2A2A`
-**Text Primary Light:** `#1A1A1A`
-**Text Primary Dark:** `#FFFFFF`
-**Text Secondary:** `#AAAAAA`
-**Font:** Poppins (300, 400, 500, 600, 700, 800)
+### Routing conventions
+- Tasks/categories/tags/analytics: `teamId != null ? '/teams/$teamId/...' : '/...'`.
+- Members/invitations are team-scoped only (`/teams/:id/members|invitations`).
+- Client generates task UUIDs and `notificationId` (client-derived, never sent
+  to the backend).
 
 ---
 
@@ -45,417 +56,146 @@
 
 ```
 lib/
-│
 ├── core/
-│   ├── constants/
-│   │   ├── colors.dart
-│   │   ├── strings.dart         # AppStrings + AppL10n (en/ar/fr)
-│   │   └── sizes.dart
-│   │
-│   ├── theme/
-│   │   ├── app_theme.dart       # light + dark ThemeData
-│   │   └── text_styles.dart
-│   │
-│   └── utils/
-│       ├── helpers.dart
-│       └── validators.dart
+│   ├── config/            api_config.dart          # baseUrl, timeouts
+│   ├── constants/         colors.dart, sizes.dart, strings.dart
+│   ├── localization/      app_localizations.dart   # en/ar/fr via l10n.get(key)
+│   ├── network/
+│   │   ├── api_client.dart                        # Dio + AuthInterceptor (refresh/retry)
+│   │   ├── api_error.dart                         # ApiException + unwrap
+│   │   ├── app_services.dart                      # single AppServices.instance holding all APIs
+│   │   ├── token_store.dart                       # secure-storage token persistence
+│   │   ├── models/        auth, user, task entities, team, member, invitation,
+│   │   │                  notification, search*, analytics, activity_log, admin,
+│   │   │                  category, tag, comment, settings, uploaded_file, pagination
+│   │   └── services/      auth, user, task, settings, team, member, invitation,
+│   │                      notification, search, analytics, activity, admin, file,
+│   │                      category, tag, comment
+│   ├── theme/             app_theme.dart (light/dark), text_styles.dart
+│   └── utils/             helpers.dart, validators.dart, password_hasher.dart
 │
 ├── features/
-│   │
 │   ├── auth/
-│   │   ├── presentation/
-│   │   │   └── screens/
-│   │   │       ├── login_screen.dart
-│   │   │       └── signup_screen.dart
-│   │   └── state/
-│   │       └── auth_provider.dart
-│   │
+│   │   ├── presentation/screens/   login_screen.dart, signup_screen.dart
+│   │   └── state/                  auth_provider.dart
+│   ├── collaboration/              # Phase 5.5 — teams & workspace features
+│   │   ├── presentation/screens/   teams, team_details, notifications, search,
+│   │   │                           analytics, activity, admin
+│   │   └── state/                  team, notification, analytics, activity, admin providers
 │   └── todo/
-│       ├── data/
-│       │   ├── models/
-│       │   │   └── task_model.dart        # TaskModel.fromJson/toJson/encode/decode
-│       │   ├── datasources/
-│       │   │   └── local_data_source.dart # getTasks/saveTasks/addTask/updateTask/deleteTask
-│       │   └── repositories/
-│       │       └── task_repository_impl.dart
-│       │
-│       ├── domain/
-│       │   ├── entities/
-│       │   │   └── task.dart              # Task entity (id,title,time,date,isDone,priority,notes,notificationId)
-│       │   ├── repositories/
-│       │   │   └── task_repository.dart
-│       │   └── usecases/
-│       │       ├── add_task.dart
-│       │       ├── get_tasks.dart
-│       │       ├── delete_task.dart
-│       │       └── update_task.dart
-│       │
-│       └── presentation/
-│           ├── screens/
-│           │   ├── splash_screen.dart     # ✅ Shows app_icon.png 120x120 rounded; routes on isLoggedIn
-│           │   ├── home_screen.dart       # ✅ Consumer<TaskProvider>; todayTasks/tomorrowTasks; completed counter
-│           │   ├── tasks_screen.dart      # ✅ All tasks; search; filter chips; completedCount chip
-│           │   ├── calendar_screen.dart   # ✅ TableCalendar; FAB adds task for selected date (YYYY-MM-DD)
-│           │   ├── profile_screen.dart    # ✅ image_picker integration; camera/gallery bottom sheet; persists path
-│           │   ├── settings_screen.dart   # ✅ Dark mode toggle; language picker; account settings
-│           │   ├── edit_profile_screen.dart
-│           │   ├── add_task_screen.dart   # ✅ Validates title; supports 'today'/'tomorrow'/'YYYY-MM-DD'; green ✓ FAB
-│           │   └── task_details_screen.dart
-│           │
-│           ├── widgets/
-│           │   ├── task_card.dart         # ✅ Flat style: checkbox + name + time; no shadows/borders
-│           │   ├── custom_button.dart
-│           │   ├── input_field.dart
-│           │   ├── priority_chip.dart
-│           │   ├── side_drawer.dart
-│           │   └── main_scaffold.dart     # ✅ backgroundColor:white; SystemUIOverlayStyle set in main.dart
-│           │
-│           └── state/
-│               ├── task_provider.dart     # ✅ Optimistic UI: list updated before I/O; allTasks alias; completedCount
-│               ├── task_state.dart
-│               └── settings_provider.dart
+│       ├── data/          (legacy clean-architecture scaffolding — see Dead Code)
+│       ├── domain/        entities/task.dart — Task entity
+│       ├── presentation/
+│       │   ├── screens/   splash, home, tasks, calendar, profile, settings,
+│       │   │              edit_profile, add_task, task_details
+│       │   ├── widgets/   main_scaffold, side_drawer, task_card, custom_button,
+│       │   │              input_field, priority_chip
+│       │   └── state/     task_provider.dart, settings_provider.dart
 │
-├── shared/
-│   ├── services/
-│   │   ├── local_storage_service.dart    # ✅ SINGLETON pattern — init() in main.dart, reused everywhere
-│   │   ├── email_service.dart
-│   │   └── notification_service.dart     # ✅ init()+scheduleTaskNotification()+cancelNotification()+cancelAll()
-│   │
-│   └── widgets/
-│       └── loading_widget.dart
-│
-└── main.dart                             # ✅ SystemChrome white nav bar; LocalStorageService.init(); NotificationService.init()
+├── shared/services/       email_service, local_storage_service, notification_service
+├── shared/widgets/        loading_widget
+└── main.dart              AppServices wiring, refreshCallback, provider tree
+
+test/
+├── core/network/          fake_adapter.dart, test_services.dart (TestBackend),
+│                          in_memory_token_storage.dart, api_client_test, api_error_test, models_test
+├── *_provider_test.dart   per-provider unit tests (TestBackend-driven)
+├── collaboration_screens_test.dart   widget tests for team/notification screens
+├── task_provider_test.dart, settings_provider_test.dart, auth_provider_test.dart
+├── widget_test.dart       full-app launch/navigation (TestBackend default routes)
+└── local_data_source_isolation_test.dart
 ```
+
+---
+
+## Providers & State
+
+| Provider | Role | Key methods |
+|----------|------|-------------|
+| `AuthProvider` | JWT session, account ops | `login`, `signUp`, `loadUser`, `logout`, `updateProfile`, `uploadAvatar`, `changeEmail`, `changePassword`, `forgotPassword`, `resetPassword`; getters `isAdmin`, `profile`, `avatarFileId`, `restorationDone` |
+| `TaskProvider` | optimistic CRUD | `addTask`, `toggleDone`, `updateTask`, `deleteTask`, `clearAll`, `loadTasks`; filters `todayTasks`/`tomorrowTasks`/`completedCount` |
+| `SettingsProvider` | user prefs | `loadSettings` (backend w/ prefs fallback), `toggleDarkMode`, `setLanguage`, `toggleNotifications` |
+| `TeamProvider` | teams + members + invites | `loadTeams`, `selectTeam`, `createTeam`, `updateTeam`, `deleteTeam`, `members`, `addMember`, `changeMemberRole`, `removeMember`, `invitations`, `createInvitation`, `revokeInvitation` |
+| `NotificationProvider` | inbox | `load`, `markRead` (optimistic, rollback), `markAllRead`; `unreadCount` |
+| `AnalyticsProvider` | stats | `load({teamId})` |
+| `ActivityProvider` | feed | `load({page, limit, type})` |
+| `AdminProvider` | admin views | `loadStats`, `loadUsers`, `loadTeams`, `loadTeamDetail`, `updateUserRole` (optimistic) |
+
+**Optimistic mutation pattern** (Task/Notification/Admin providers): update local
+state → `notifyListeners()` → call API → on `ApiException` roll back and set
+`_errorMessage`. 401 during a call triggers the interceptor refresh; `loadTasks()`
+clears on 401.
 
 ---
 
 ## Screens Flow
 
 ```
-SplashScreen (2s) → checks isLoggedIn
-      ├── true  → MainScaffold (skip login forever)
-      └── false → LoginScreen → SignupScreen
-                      ↓ (on login/signup — saved permanently)
-              MainScaffold (BottomNav + Drawer)
-                ├── HomeScreen       (tab 0)
-                ├── TasksScreen      (tab 1)
-                ├── CalendarScreen   (tab 2)  ← FAB adds task for selected date
-                └── ProfileScreen    (tab 3)  ← tap avatar to change profile picture
-                     └── SettingsScreen
+SplashScreen → awaits auth.restorationDone
+   ├─ signed out → LoginScreen / SignupScreen
+   └─ signed in  → MainScaffold (4 bottom tabs)
+        ├── HomeScreen      (tab 0) — today/tomorrow + progress card
+        ├── TasksScreen     (tab 1) — all tasks, search, filter chips
+        ├── CalendarScreen  (tab 2) — date-scoped add
+        └── ProfileScreen   (tab 3) — avatar upload (FileApi), account actions
+
+SideDrawer (from any tab):
+   Main menu: Home, Task Lists, Remove Tasks
+   Workspace: My Teams → TeamsScreen → TeamDetailsScreen
+              Notifications → NotificationsScreen
+              Search → SearchScreen
+              Analytics → AnalyticsScreen
+              Activity → ActivityScreen
+              Admin Panel (only when auth.isAdmin) → AdminScreen
+   Actions: Send Feedback, Follow Us, Invite Friends, Settings
 ```
 
 ---
 
-## Feature Details
+## Localization
 
-### FEATURE 1 — Splash Screen Icon
-- `splash_screen.dart`: `Image.asset('assets/images/app_icon.png', width:120, height:120)` in `ClipRRect`
-- Fallback to "T" letter if image fails to load
-- Animation: fade + scale (1.2s) → 2s delay → route based on `isLoggedIn`
-
-### FEATURE 2 — Persistent Login
-- `AuthProvider.signUp()` and `AuthProvider.login()` both set `isLoggedIn = true` and persist to SharedPreferences
-- `SplashScreen` reads `context.read<AuthProvider>().isLoggedIn`
-- `AuthProvider.logout()` sets `isLoggedIn = false` → only triggered by Logout button in ProfileScreen
-
-### FEATURE 3 — Add Task (Instant UI)
-**Key pattern in `task_provider.dart`:**
-```dart
-Future<void> addTask(Task task) async {
-  _tasks.add(task);      // 1. Instant in-memory update
-  notifyListeners();     // 2. UI rebuilds immediately
-  try {
-    await _addTask(task); // 3. Persist to SharedPreferences
-    // schedule notification
-  } catch (e) {
-    _tasks.removeWhere((t) => t.id == task.id); // rollback on failure
-    notifyListeners();
-  }
-}
-```
-- Same optimistic pattern for `toggleDone()`, `deleteTask()`, `updateTask()`
-- `LocalStorageService` is a **singleton** — `factory LocalStorageService() => _instance` — ensures the instance initialized in `main()` is always reused
-
-### FEATURE 4 — Calendar Add Task with Date
-- `CalendarScreen` has a FAB that calls `_addTaskForDate(context)`
-- Converts `_selectedDay` to `'today'`, `'tomorrow'`, or `'yyyy-MM-dd'` string
-- `AddTaskScreen(initialDate: dateArg)` accepts all three formats
-- When `initialDate` is YYYY-MM-DD (`_isCustomDate == true`), a third chip shows the formatted date
-- `TaskProvider.todayTasks` / `tomorrowTasks` also resolve YYYY-MM-DD strings matching today/tomorrow
-
-### FEATURE 5 — Completed Counter
-- `TaskProvider.completedCount` getter: `_tasks.where((t) => t.isDone).length`
-- `home_screen.dart`: `Consumer<TaskProvider>` rebuilds greeting card with `$doneTasks / $total completed`
-- `tasks_screen.dart`: shows `$completedCount tasks completed ✓` chip — updates in real time via same Consumer
-
-### FEATURE 6 — Local Notifications
-- `NotificationService.init()` called in `main()` before `runApp()`
-- Requests Android 13+ permission on first launch
-- `scheduleTaskNotification()` called inside `TaskProvider.addTask()` after persistence
-- `cancelNotification()` called inside `TaskProvider.deleteTask()` using `task.notificationId`
-- `task.notificationId` = `id.hashCode.abs() % 2147483647` (stable, derived from task UUID)
-- Silent fail for all notification ops (best-effort, never crashes app)
-
-**AndroidManifest.xml permissions:**
-```xml
-<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-<uses-permission android:name="android.permission.VIBRATE"/>
-<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
-```
-
-### FEATURE 7 — Profile Picture Change
-- `ProfileScreen` renders `_TappableAvatar` (StatelessWidget)
-- Tapping opens a `showModalBottomSheet` with Camera / Gallery options
-- `ImagePicker().pickImage(source: source, imageQuality: 80)` returns path
-- Path saved via `AuthProvider.updateProfile(profileImagePath: picked.path)`
-- Displayed via `Image.file(File(auth.profileImagePath))` with initials fallback
-
-### FEATURE 8 — Flat Task Row Style
-`task_card.dart` uses `InkWell` + plain `Container(color: AppColors.background)`:
-- No `BoxShadow`, no `border`, no card elevation
-- Layout: `[checkbox 24x24] [title + time (Expanded)] [priority strip 4x36]`
-- Pending: empty orange square checkbox
-- Done: filled orange checkbox with white `✓` + strikethrough title + grey time
+- All UI text lives in `core/localization/app_localizations.dart` under `_strings`
+  with `en`, `ar`, `fr` maps. Keys fall back to English, then the raw key.
+- Read in `build`: `AppLocalizations.of(context)` (watches `SettingsProvider`).
+- Read in event handlers (sheets/dialogs triggered by taps): **must use**
+  `AppLocalizations.read(context)` — `.of` calls `context.watch`, which throws
+  outside `build`.
 
 ---
 
-## Auth Feature
+## Testing
 
-### auth_provider.dart
-- ChangeNotifier
-- Fields: name, email, password, phone, country, bio, **profileImagePath**, isLoggedIn
-- Methods: `signUp()`, `login()`, `logout()`, `updateProfile()`, `changeEmail()`, `changePassword()`, `loadUser()`
-- ALL data persisted in SharedPreferences immediately via `_save()`
-- `isLoggedIn=true` saved on first login/signup and NEVER cleared unless user taps Logout
-- `loadUser()` called on app start to restore full session
-
----
-
-## Bottom Navigation (main_scaffold.dart)
-
-4 tabs:
-- **Home** — house icon (tab 0)
-- **Tasks** — checklist icon (tab 1)
-- **Calendar** — calendar icon (tab 2)
-- **Profile** — person icon (tab 3)
-
-Style:
-- `backgroundColor: AppColors.white` on Scaffold
-- White nav bar with rounded top corners, subtle shadow
-- Active: orange icon + orange bold label + small orange dot below
-- Hamburger (☰) in AppBar top-left opens SideDrawer on all tabs
-
----
-
-## Task Entity
-
-```dart
-class Task {
-  final String id;           // UUID v4
-  final String title;
-  final String time;         // "06:00 AM"
-  final String date;         // "today", "tomorrow", or "YYYY-MM-DD"
-  final bool isDone;
-  final String priority;     // "high", "medium", "low"
-  final String? notes;
-  final DateTime createdAt;
-  final int notificationId;  // id.hashCode.abs() % 2147483647
-}
-```
-
----
-
-## TaskProvider Getters
-
-```dart
-List<Task> get tasks       // all tasks (raw list)
-List<Task> get allTasks    // alias for tasks
-List<Task> get todayTasks  // date == 'today' OR YYYY-MM-DD matching today
-List<Task> get tomorrowTasks // date == 'tomorrow' OR YYYY-MM-DD matching tomorrow
-int get completedCount     // tasks.where((t) => t.isDone).length
-```
-
----
-
-## LocalStorageService — Singleton Pattern
-
-```dart
-class LocalStorageService {
-  static final LocalStorageService _instance = LocalStorageService._internal();
-  factory LocalStorageService() => _instance;
-  LocalStorageService._internal();
-  late SharedPreferences _prefs;
-  Future<void> init() async { _prefs = await SharedPreferences.getInstance(); }
-  // read/write/delete/clear/hasKey
-}
-```
-
-**CRITICAL:** `LocalStorageService().init()` is called ONCE in `main()`. All providers use
-`LocalStorageService()` factory which returns the same singleton with the initialized `_prefs`.
-
----
-
-## Notification Service
-
-```dart
-class NotificationService {
-  static Future<void> init() async { ... }                          // call in main()
-  static Future<void> scheduleTaskNotification({id, title, scheduledTime}) async { ... }
-  static Future<void> cancelNotification(int id) async { ... }
-  static Future<void> cancelAll() async { ... }
-  static DateTime? parseTaskDateTime(String time, String date) { ... }
-}
-```
-
-`parseTaskDateTime` handles `'today'`, `'tomorrow'`, and `'YYYY-MM-DD'` date strings.
-
----
-
-## Localization Strings (3 languages)
-
-All text supports English / Arabic / French via `AppL10n.t(key, lang)`.
-
-```
-hello:        "Hello"          / "مرحبا"        / "Bonjour"
-tasks:        "Tasks"          / "المهام"        / "Tâches"
-add_task:     "Add New Task"   / "إضافة مهمة"   / "Ajouter une tâche"
-settings:     "Settings"       / "الإعدادات"    / "Paramètres"
-profile:      "Profile"        / "الملف الشخصي"/ "Profil"
-home:         "Home"           / "الرئيسية"     / "Accueil"
-calendar:     "Calendar"       / "التقويم"      / "Calendrier"
-today:        "TODAY"          / "اليوم"        / "AUJOURD'HUI"
-tomorrow:     "TOMORROW"       / "غداً"         / "DEMAIN"
-completed:    "completed"      / "مكتملة"       / "terminées"
-organize:     "Organize your day" / "نظّم يومك" / "Organisez votre journée"
-tasko:        "Tasko"          / "Tasko"        / "Tasko"
-dark_mode:    "Dark Mode"      / "الوضع الداكن" / "Mode sombre"
-language:     "Language"       / "اللغة"        / "Langue"
-logout:       "Logout"         / "تسجيل الخروج" / "Déconnexion"
-save:         "Save"           / "حفظ"          / "Enregistrer"
-```
-
----
-
-## Platform Setup
-
-### AndroidManifest.xml (complete)
-```xml
-<uses-permission android:name="android.permission.INTERNET"/>
-<uses-permission android:name="android.permission.CAMERA"/>
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-<uses-permission android:name="android.permission.VIBRATE"/>
-<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
-
-<!-- Inside application tag -->
-<receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
-<receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
-  <intent-filter>
-    <action android:name="android.intent.action.BOOT_COMPLETED"/>
-    <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
-    <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
-  </intent-filter>
-</receiver>
-```
-
-### iOS Info.plist
-```xml
-<key>CFBundleDisplayName</key>
-<string>Tasko</string>
-<key>NSCameraUsageDescription</key>
-<string>Used to set your profile picture</string>
-<key>NSPhotoLibraryUsageDescription</key>
-<string>Used to pick a profile picture</string>
-```
-
----
-
-## Dependencies (pubspec.yaml)
-
-```yaml
-dependencies:
-  flutter:
-    sdk: flutter
-  flutter_localizations:
-    sdk: flutter
-  provider: ^6.1.1
-  shared_preferences: ^2.2.2
-  google_fonts: ^6.1.0
-  uuid: ^4.3.3
-  intl: ^0.19.0
-  url_launcher: ^6.2.5
-  image_picker: ^1.0.7
-  share_plus: ^7.2.1
-  table_calendar: ^3.1.1
-  flutter_local_notifications: ^17.0.0
-  timezone: ^0.9.4
-
-dev_dependencies:
-  flutter_launcher_icons: ^0.13.1
-
-flutter_icons:
-  android: true
-  ios: true
-  image_path: "assets/images/app_icon.png"
-
-flutter:
-  assets:
-    - assets/images/
-```
+- **`TestBackend(handler)`** (`test/core/network/test_services.dart`) wires an
+  `AppServices` to a `FakeAdapter` keyed by `'METHOD path'` with `ok(...)` /
+  `failResponse(...)` envelope helpers. All provider/screen tests reuse it.
+- Provider unit tests assert optimistic apply + rollback + `_errorMessage`.
+- Handler closures must dispatch by method when a test both loads and mutates.
+- Run: `flutter analyze` (must be zero issues) and `flutter test` (full suite).
+- Backend suites (`npm run build/lint/test/e2e`) require Docker/Postgres — **not
+  installed in this environment**; flag in reports.
 
 ---
 
 ## Conventions
 
-- All widgets `StatelessWidget` unless local UI state needed
-- `context.watch<P>()` for UI, `context.read<P>()` for actions
-- All colors from `AppColors` — zero hardcoded hex in widgets
-- All spacing from `AppSizes` — zero hardcoded numbers in widgets
-- `LocalStorageService` is a singleton — never call `init()` more than once
-- Tasks saved to SharedPreferences on EVERY change via optimistic pattern
-- `isLoggedIn` saved permanently — user never re-logs unless they tap Logout
-- Dark mode and language change take effect INSTANTLY without restart
-- `flutter analyze` passes with zero issues ✅
+- `context.watch<P>()` for UI reads; `context.read<P>()` in callbacks.
+- All providers take `AppServices? services` and default to `AppServices.instance`.
+- All colors/spacing from `AppColors`/`AppSizes`; Poppins via `GoogleFonts`;
+  `AppTextStyles` for text.
+- Dark-mode aware (theme.primaryColor amber `#FF9F00`, colorScheme surfaces).
+- New screens are pushed routes with an auto back button; only the 4 tabs use
+  the drawer hamburger (`scaffoldKey`).
+- Best-effort subsystems (notifications, image picking, date parsing) log via
+  `debugPrint` with context — never fully silent `catch (_) {}`.
 
 ---
 
-## Security & Privacy Risks
+## Dead Code / Known Gaps
 
-- **Plaintext Credentials:** Passwords are stored in plaintext at `'auth_password'` in `SharedPreferences`.
-- **Account Isolation Failure:** The tasks storage key (`'tasks'`) is global. If a new user signs up (which overwrites the user profile in local storage), the previously created tasks remain visible and active. There is no user isolation or data purging upon account switching/signup.
-- **Local Authentication Bypass:** The login check compares against local plain text fields. Since only one profile can be saved at a time, there is no multi-user support.
-
----
-
-## Technical Debt & Architectural Gaps
-
-- **Direct Storage Bypasses:** `SettingsProvider` bypasses the `LocalStorageService` wrapper and instantiates `SharedPreferences.getInstance()` directly.
-- **Home Screen Date Filtering Limitation:** `todayTasks` and `tomorrowTasks` in `TaskProvider` perform exact string matches on `'today'` and `'tomorrow'`. Tasks saved with dates formatted as `yyyy-MM-dd` (e.g. `'2026-06-11'`) will not appear in the TODAY/TOMORROW sections of `HomeScreen` even if they refer to the current or next day.
-- **No Date Picker in AddTaskScreen:** `AddTaskScreen` does not provide a standard date picker. Users can only select "Today" or "Tomorrow" unless they navigate from `CalendarScreen` (which pre-populates a custom date chip).
-- **Absolute Image Path Persistence:** The profile picture path is saved as a local absolute path (`picked.path`). This can easily break across device runs if the app's sandboxed path changes or permissions are modified.
-
----
-
-## Dead Code & Unused Artifacts
-
-- **Clean Architecture Scaffolding:** The entire clean architecture implementation for the todo feature is unused. `TaskProvider` communicates directly with `LocalStorageService`, bypassing:
-  - [local_data_source.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/data/datasources/local_data_source.dart)
-  - [task_repository_impl.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/data/repositories/task_repository_impl.dart)
-  - [task_repository.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/domain/repositories/task_repository.dart)
-  - [add_task.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/domain/usecases/add_task.dart)
-  - [delete_task.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/domain/usecases/delete_task.dart)
-  - [get_tasks.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/domain/usecases/get_tasks.dart)
-  - [update_task.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/domain/usecases/update_task.dart)
-- **Unused State:** [task_state.dart](file:///e:/CS.HNU/Porjects/To%20Do%20App/antigravity/lib/features/todo/presentation/state/task_state.dart) (Unused `TaskState` enum).
-
----
-
-## Hidden & Platform Dependencies
-
-- **Local Notification Receivers:** Setup in `AndroidManifest.xml` (e.g. `ScheduledNotificationReceiver`, `ScheduledNotificationBootReceiver`) to ensure notifications survive device restarts.
-- **URL Launcher Queries:** Custom `<queries>` intents in `AndroidManifest.xml` (for `mailto:`, `https:`, `http:`) to avoid crashes/silent failures on Android 11+.
-- **Timezone Database Setup:** Direct dependency on the `timezone` package loaded in `main.dart` with `tz_data.initializeTimeZones()` to schedule exact local notifications.
+- `features/todo/data`, `features/todo/domain/usecases` are legacy clean-architecture
+  scaffolding (bypassed by `TaskProvider` → `TaskApi`). Keep only if a future
+  refactor adopts them.
+- Backend integration/e2e suites are Docker-gated and cannot run on this machine.
+- Avatar path is stored locally (`_profileImagePath`) while `avatarFileId` comes
+  from the backend profile; `uploadAvatar` uploads via `FileApi.uploadAvatar`.
+- Settings cache in SharedPreferences is a fallback only; backend is source of truth.

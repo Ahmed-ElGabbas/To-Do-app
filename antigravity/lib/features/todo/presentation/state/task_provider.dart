@@ -101,7 +101,7 @@ class TaskProvider extends ChangeNotifier {
       notifyListeners();
     }
 
-    // Schedule notification (silent fail — never crashes the app)
+    // Schedule notification (best-effort — never crashes the app)
     try {
       final scheduledTime =
           NotificationService.parseTaskDateTime(task.time, task.date);
@@ -112,7 +112,10 @@ class TaskProvider extends ChangeNotifier {
           scheduledTime: scheduledTime,
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('TaskProvider: failed to schedule notification for '
+          '${task.id}: $e');
+    }
   }
 
   // ── Toggle done ───────────────────────────────────────────────────────────
@@ -154,7 +157,10 @@ class TaskProvider extends ChangeNotifier {
     }
     try {
       await NotificationService.cancelNotification(task.notificationId);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('TaskProvider: failed to cancel notification for '
+          '${task.id}: $e');
+    }
   }
 
   // ── Update ────────────────────────────────────────────────────────────────
@@ -204,7 +210,9 @@ class TaskProvider extends ChangeNotifier {
     }
     try {
       await NotificationService.cancelAll();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('TaskProvider: failed to cancel all notifications: $e');
+    }
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

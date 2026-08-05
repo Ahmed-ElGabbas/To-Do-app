@@ -9,6 +9,12 @@ import 'package:tasko/core/constants/strings.dart';
 import 'package:tasko/core/theme/text_styles.dart';
 import 'package:tasko/core/localization/app_localizations.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
+import 'package:tasko/features/collaboration/presentation/screens/teams_screen.dart';
+import 'package:tasko/features/collaboration/presentation/screens/notifications_screen.dart';
+import 'package:tasko/features/collaboration/presentation/screens/search_screen.dart';
+import 'package:tasko/features/collaboration/presentation/screens/analytics_screen.dart';
+import 'package:tasko/features/collaboration/presentation/screens/activity_screen.dart';
+import 'package:tasko/features/collaboration/presentation/screens/admin_screen.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
 import 'package:tasko/features/todo/presentation/state/settings_provider.dart';
 import 'package:tasko/shared/services/email_service.dart';
@@ -69,6 +75,79 @@ class SideDrawer extends StatelessWidget {
                     color: contentColor,
                     onTap: () => _confirmDeleteAll(context),
                   ),
+                  _buildMenuItem(
+                    context,
+                    icon: Icons.groups_rounded,
+                    label: l10n.get('my_teams'),
+                    color: contentColor,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const TeamsScreen()),
+                      );
+                    },
+                  ),
+                  _buildMenuItem(
+                    context,
+                    icon: Icons.notifications_outlined,
+                    label: l10n.get('notifications'),
+                    color: contentColor,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                      );
+                    },
+                  ),
+                  _buildMenuItem(
+                    context,
+                    icon: Icons.search_rounded,
+                    label: l10n.get('search_menu'),
+                    color: contentColor,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SearchScreen()),
+                      );
+                    },
+                  ),
+                  _buildMenuItem(
+                    context,
+                    icon: Icons.bar_chart_rounded,
+                    label: l10n.get('analytics'),
+                    color: contentColor,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AnalyticsScreen()),
+                      );
+                    },
+                  ),
+                  _buildMenuItem(
+                    context,
+                    icon: Icons.history_rounded,
+                    label: l10n.get('activity'),
+                    color: contentColor,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ActivityScreen()),
+                      );
+                    },
+                  ),
+                  if (auth.isAdmin)
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.admin_panel_settings_rounded,
+                      label: l10n.get('admin_panel'),
+                      color: contentColor,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const AdminScreen()),
+                        );
+                      },
+                    ),
                   const SizedBox(height: AppSizes.md),
                   _buildSectionLabel(l10n.get('actions'), contentColor),
                   _buildMenuItem(

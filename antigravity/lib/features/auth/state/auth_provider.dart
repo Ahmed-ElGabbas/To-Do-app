@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:tasko/core/network/api_error.dart';
 import 'package:tasko/core/network/app_services.dart';
@@ -190,6 +191,19 @@ class AuthProvider extends ChangeNotifier {
       if (country != null) _country = country;
       if (bio != null) _bio = bio;
       if (profileImagePath != null) _profileImagePath = profileImagePath;
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
+      return false;
+    }
+  }
+
+  Future<bool> uploadAvatar(File file) async {
+    _errorMessage = null;
+    try {
+      await _services.fileApi.uploadAvatar(file);
+      _profileImagePath = file.path;
       notifyListeners();
       return true;
     } on ApiException catch (e) {

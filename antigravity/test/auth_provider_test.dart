@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
@@ -440,6 +442,55 @@ void main() {
 
       expect(auth.isAdmin, isTrue);
       expect(auth.role, 'ADMIN');
+    });
+  });
+
+  group('uploadAvatar', () {
+    test('uploads the file and caches the local path', () async {
+      final file = File('${Directory.systemTemp.path}/tasko_avatar_test.png');
+      await file.writeAsBytes([1, 2, 3]);
+      final backend = TestBackend((options, attempt) {
+        expect(options.method, 'POST');
+        expect(options.path, '/files/avatar');
+        return ok({
+          'id': 'file-1',
+          'kind': 'avatar',
+          'mimeType': 'image/png',
+          'size': 3,
+          'originalName': 'avatar.png',
+          'url': 'https://cdn.test/avatar.png',
+          'createdAt': '2025-01-01T00:00:00.000Z',
+        });
+      });
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.uploadAvatar(file);
+
+      expect(result, isTrue);
+      expect(auth.profileImagePath, file.path);
+      try {
+        await file.delete();
+      } on FileSystemException {
+        // The upload keeps the handle open; the temp file is harmless.
+      }
+    });
+
+    test('fails when the backend rejects the upload', () async {
+      final file = File('${Directory.systemTemp.path}/tasko_avatar_bad.png');
+      await file.writeAsBytes([1, 2, 3]);
+      final backend = TestBackend((options, attempt) =>
+          failResponse('FILE_TOO_LARGE', 'Too big', status: 413));
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.uploadAvatar(file);
+
+      expect(result, isFalse);
+      expect(auth.profileImagePath, isEmpty);
+      try {
+        await file.delete();
+      } on FileSystemException {
+        // The upload keeps the handle open; the temp file is harmless.
+      }
     });
   });
 }
