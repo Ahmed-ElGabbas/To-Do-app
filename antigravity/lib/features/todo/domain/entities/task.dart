@@ -6,7 +6,11 @@ class Task {
   final bool isDone;
   final String priority; // "high", "medium", "low"
   final String? notes;
+  final String? teamId;
+  final String? categoryId;
+  final List<String> tagIds;
   final DateTime createdAt;
+  final DateTime? updatedAt;
   final int notificationId; // used to cancel notification on delete
 
   Task({
@@ -17,9 +21,14 @@ class Task {
     this.isDone = false,
     this.priority = 'medium',
     this.notes,
+    this.teamId,
+    this.categoryId,
+    List<String>? tagIds,
     DateTime? createdAt,
+    this.updatedAt,
     int? notificationId,
-  })  : createdAt = createdAt ?? DateTime.now(),
+  })  : tagIds = tagIds ?? const [],
+        createdAt = createdAt ?? DateTime.now(),
         notificationId = notificationId ?? id.hashCode.abs() % 2147483647;
 
   Task copyWith({
@@ -30,7 +39,11 @@ class Task {
     bool? isDone,
     String? priority,
     String? notes,
+    String? teamId,
+    String? categoryId,
+    List<String>? tagIds,
     DateTime? createdAt,
+    DateTime? updatedAt,
     int? notificationId,
   }) {
     return Task(
@@ -41,7 +54,11 @@ class Task {
       isDone: isDone ?? this.isDone,
       priority: priority ?? this.priority,
       notes: notes ?? this.notes,
+      teamId: teamId ?? this.teamId,
+      categoryId: categoryId ?? this.categoryId,
+      tagIds: tagIds ?? this.tagIds,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       notificationId: notificationId ?? this.notificationId,
     );
   }
