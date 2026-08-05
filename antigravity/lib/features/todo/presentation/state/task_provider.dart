@@ -1,39 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:tasko/core/network/api_error.dart';
+import 'package:tasko/core/network/app_services.dart';
+import 'package:tasko/features/todo/data/models/task_model.dart';
 import 'package:tasko/features/todo/domain/entities/task.dart';
-import 'package:tasko/features/todo/domain/repositories/task_repository.dart';
-import 'package:tasko/features/todo/domain/usecases/add_task.dart';
-import 'package:tasko/features/todo/domain/usecases/delete_task.dart';
-import 'package:tasko/features/todo/domain/usecases/get_tasks.dart';
-import 'package:tasko/features/todo/domain/usecases/update_task.dart';
-import 'package:tasko/shared/services/local_storage_service.dart';
 import 'package:tasko/shared/services/notification_service.dart';
 
-/// Simple ChangeNotifier for task management.
-/// Delegates task persistence to TaskRepository via the GetTasks/AddTask/UpdateTask/DeleteTask use-cases.
-/// Notification-scheduling errors are intentionally swallowed (best-effort, non-fatal) and are not currently logged.
+/// ChangeNotifier for task management backed by the Tasko backend.
+///
+/// Mutations are optimistic: the in-memory list updates immediately and the
+/// server write happens in the background. If a write fails the change is
+/// rolled back and [errorMessage] is surfaced. Notification-scheduling errors
+/// are intentionally swallowed (best-effort, non-fatal).
 class TaskProvider extends ChangeNotifier {
-  final _storage = LocalStorageService();
-  final TaskRepository _repository;
-  final GetTasks _getTasks;
-  final AddTask _addTask;
-  final UpdateTask _updateTask;
-  final DeleteTask _deleteTask;
+  TaskProvider({AppServices? services})
+      : _services = services ?? AppServices.instance;
+
+  final AppServices _services;
 
   List<Task> _tasks = [];
-
-  // ── Constructor ─────────────────────────────────────────────────────────────
-
-  TaskProvider(TaskRepository repository)
-      : _repository = repository,
-        _getTasks = GetTasks(repository),
-        _addTask = AddTask(repository),
-        _updateTask = UpdateTask(repository),
-        _deleteTask = DeleteTask(repository);
+  bool _isLoading = false;
+  String? _errorMessage;
 
   // ── Getters ───────────────────────────────────────────────────────────────
 
   List<Task> get tasks => _tasks;
   List<Task> get allTasks => _tasks;
+  bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
 
   /// Tasks with date matching today (relative or ISO format) timezone-safely
   List<Task> get todayTasks {
@@ -45,7 +38,8 @@ class TaskProvider extends ChangeNotifier {
   /// Tasks with date matching tomorrow (relative or ISO format) timezone-safely
   List<Task> get tomorrowTasks {
     final now = DateTime.now();
-    final tomorrowDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    final tomorrowDate =
+        DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
     return _tasks.where((t) => _isSameDate(t.date, tomorrowDate)).toList();
   }
 
@@ -54,33 +48,57 @@ class TaskProvider extends ChangeNotifier {
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
-  /// Call once at startup (inside MultiProvider create) or on session change.
+  /// Fetches the current user's tasks. Call once at startup (inside the
+  /// MultiProvider create) or on session change.
   Future<void> loadTasks() async {
-    final email = _storage.read('auth_email') ?? '';
-    final isLoggedIn = _storage.readBool('auth_is_logged_in') ?? false;
-    if (isLoggedIn && email.isNotEmpty) {
-      _tasks = List<Task>.of(await _getTasks.call(email));
-    } else {
-      _tasks = [];
-    }
+    _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
+    try {
+      final result = await _services.taskApi.list();
+      _tasks = result.items.map((m) => m as Task).toList();
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
+      if (e.isUnauthorized) {
+        // The session is gone; drop stale tasks rather than showing them.
+        _tasks = [];
+      }
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   // ── Add ───────────────────────────────────────────────────────────────────
 
-  /// Adds a task.
-  /// Step 1: add to in-memory list and notify → UI updates INSTANTLY.
-  /// Step 2: persist via use-case.
-  /// Step 3: schedule notification (best-effort).
+  /// Adds a task. The list updates instantly, the task is persisted on the
+  /// backend, and a local notification is scheduled (best-effort).
   Future<void> addTask(Task task) async {
-    // Instant UI update — happens synchronously before any await
-    _tasks.add(task);
+    final optimistic = TaskModel.fromEntity(task);
+    _tasks.add(optimistic);
+    _errorMessage = null;
     notifyListeners();
 
-    // Persist via use-case
-    final email = _storage.read('auth_email') ?? '';
-    if (email.isNotEmpty) {
-      await _addTask.call(email, task);
+    try {
+      final created = await _services.taskApi.create(
+        id: task.id,
+        title: task.title,
+        time: task.time,
+        date: task.date,
+        isDone: task.isDone,
+        priority: task.priority,
+        notes: task.notes,
+        categoryId: task.categoryId,
+        tagIds: task.tagIds,
+        teamId: task.teamId,
+      );
+      final index = _tasks.indexWhere((t) => t.id == task.id);
+      if (index != -1) _tasks[index] = created;
+      notifyListeners();
+    } on ApiException catch (e) {
+      _tasks.removeWhere((t) => t.id == task.id);
+      _errorMessage = e.message;
+      notifyListeners();
     }
 
     // Schedule notification (silent fail — never crashes the app)
@@ -102,12 +120,19 @@ class TaskProvider extends ChangeNotifier {
   Future<void> toggleDone(String id) async {
     final index = _tasks.indexWhere((t) => t.id == id);
     if (index == -1) return;
-    _tasks[index] = _tasks[index].copyWith(isDone: !_tasks[index].isDone);
+    final previous = _tasks[index];
+    final updated = previous.copyWith(isDone: !previous.isDone);
+    _tasks[index] = updated;
+    _errorMessage = null;
     notifyListeners();
 
-    final email = _storage.read('auth_email') ?? '';
-    if (email.isNotEmpty) {
-      await _updateTask.call(email, _tasks[index]);
+    try {
+      await _services.taskApi.toggleDone(id, updated.isDone,
+          teamId: previous.teamId);
+    } on ApiException catch (e) {
+      _tasks[index] = previous;
+      _errorMessage = e.message;
+      notifyListeners();
     }
   }
 
@@ -117,11 +142,15 @@ class TaskProvider extends ChangeNotifier {
     final task = _tasks.firstWhere((t) => t.id == id,
         orElse: () => throw StateError('Task $id not found'));
     _tasks.removeWhere((t) => t.id == id);
+    _errorMessage = null;
     notifyListeners();
 
-    final email = _storage.read('auth_email') ?? '';
-    if (email.isNotEmpty) {
-      await _deleteTask.call(email, id);
+    try {
+      await _services.taskApi.delete(id, teamId: task.teamId);
+    } on ApiException catch (e) {
+      _tasks.add(task);
+      _errorMessage = e.message;
+      notifyListeners();
     }
     try {
       await NotificationService.cancelNotification(task.notificationId);
@@ -133,24 +162,45 @@ class TaskProvider extends ChangeNotifier {
   Future<void> updateTask(Task task) async {
     final index = _tasks.indexWhere((t) => t.id == task.id);
     if (index == -1) return;
-    _tasks[index] = task;
+    final previous = _tasks[index];
+    _tasks[index] = TaskModel.fromEntity(task);
+    _errorMessage = null;
     notifyListeners();
 
-    final email = _storage.read('auth_email') ?? '';
-    if (email.isNotEmpty) {
-      await _updateTask.call(email, task);
+    try {
+      await _services.taskApi.update(
+        task.id,
+        title: task.title,
+        time: task.time,
+        date: task.date,
+        isDone: task.isDone,
+        priority: task.priority,
+        notes: task.notes,
+        categoryId: task.categoryId,
+        tagIds: task.tagIds,
+        teamId: task.teamId,
+      );
+    } on ApiException catch (e) {
+      _tasks[index] = previous;
+      _errorMessage = e.message;
+      notifyListeners();
     }
   }
 
   // ── Clear all ─────────────────────────────────────────────────────────────
 
   Future<void> clearAll() async {
+    final removed = List<Task>.from(_tasks);
     _tasks.clear();
+    _errorMessage = null;
     notifyListeners();
 
-    final email = _storage.read('auth_email') ?? '';
-    if (email.isNotEmpty) {
-      await _repository.clearAllTasks(email);
+    for (final task in removed) {
+      try {
+        await _services.taskApi.delete(task.id, teamId: task.teamId);
+      } on ApiException catch (e) {
+        _errorMessage = e.message;
+      }
     }
     try {
       await NotificationService.cancelAll();
@@ -169,7 +219,8 @@ class TaskProvider extends ChangeNotifier {
     }
     if (d == 'tomorrow') {
       final now = DateTime.now();
-      final tomorrow = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+      final tomorrow =
+          DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
       return target == tomorrow;
     }
     try {

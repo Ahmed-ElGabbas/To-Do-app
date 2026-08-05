@@ -7,9 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
 import 'package:tasko/features/auth/presentation/screens/login_screen.dart';
-import 'package:tasko/features/todo/data/datasources/local_data_source.dart';
-import 'package:tasko/features/todo/data/repositories/task_repository_impl.dart';
-import 'package:tasko/features/todo/domain/repositories/task_repository.dart';
 import 'package:tasko/features/todo/presentation/screens/splash_screen.dart';
 import 'package:tasko/features/todo/presentation/state/settings_provider.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
@@ -61,6 +58,22 @@ void main() {
             'createdAt': '2025-01-01T00:00:00.000Z',
             'updatedAt': '2025-01-01T00:00:00.000Z',
           });
+        case 'GET /tasks':
+          return ok({
+            'page': 1,
+            'limit': 100,
+            'total': 0,
+            'totalPages': 0,
+            'items': <dynamic>[],
+          });
+        case 'GET /settings':
+          return ok({
+            'userId': 'user-1',
+            'darkMode': false,
+            'notificationsEnabled': true,
+            'language': 'en',
+            'updatedAt': '2025-01-01T00:00:00.000Z',
+          });
         default:
           throw StateError('unexpected ${options.method} ${options.path}');
       }
@@ -69,11 +82,9 @@ void main() {
   });
 
   Widget buildApp() {
-    final localDataSource = LocalDataSource(LocalStorageService());
-    final taskRepository = TaskRepositoryImpl(localDataSource) as TaskRepository;
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => TaskProvider(taskRepository)..loadTasks()),
+        ChangeNotifierProvider(create: (_) => TaskProvider()..loadTasks()),
         ChangeNotifierProvider(create: (_) => AuthProvider()..loadUser()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()..loadSettings()),
       ],
