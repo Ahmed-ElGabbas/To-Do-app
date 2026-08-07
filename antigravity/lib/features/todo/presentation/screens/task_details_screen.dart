@@ -7,6 +7,7 @@ import 'package:tasko/features/todo/domain/entities/task.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
 import 'package:tasko/features/todo/presentation/screens/add_task_screen.dart';
 import 'package:tasko/features/todo/presentation/widgets/custom_button.dart';
+import 'package:tasko/features/collaboration/presentation/screens/comments_screen.dart';
 
 class TaskDetailsScreen extends StatelessWidget {
   final Task task;
@@ -40,6 +41,16 @@ class TaskDetailsScreen extends StatelessWidget {
         ),
         title: Text(l10n.get('task_details'), style: AppTextStyles.heading3.copyWith(color: theme.colorScheme.onSurface)),
         actions: [
+          IconButton(
+            icon: Icon(Icons.chat_bubble_outline_rounded, color: theme.primaryColor),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => CommentsScreen(taskId: currentTask.id),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: Icon(Icons.edit_rounded, color: theme.primaryColor),
             onPressed: () {
