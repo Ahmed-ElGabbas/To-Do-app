@@ -1,19 +1,9 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 require('better-sqlite3')().close();
 
-// Defaults are only applied when unset so a CI job can run this suite against a
-// real Postgres service container by setting DB_TYPE=postgres (+ DB_HOST etc.).
-if (process.env.NODE_ENV === undefined) process.env.NODE_ENV = 'test';
-if (process.env.DB_TYPE === undefined) process.env.DB_TYPE = 'sqlite';
-if (process.env.DB_FILE === undefined) process.env.DB_FILE = ':memory:';
-if (process.env.JWT_SECRET === undefined) {
-  process.env.JWT_SECRET =
-    'integration-test-secret-that-is-definitely-long-enough-123456';
-}
-if (process.env.REDIS_URL === undefined) process.env.REDIS_URL = '';
-if (process.env.SMTP_HOST === undefined) process.env.SMTP_HOST = '';
-if (process.env.MAIL_FROM === undefined)
-  process.env.MAIL_FROM = 'no-reply@tasko.dev';
+// Seeds process.env with hermetic test defaults; must run before AppModule is
+// imported because @nestjs/config reads the environment at import time.
+import '../test-env';
 
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { getStorageToken } from '@nestjs/throttler';
