@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:tasko/core/constants/sizes.dart';
 import 'package:tasko/core/localization/app_localizations.dart';
-import 'package:tasko/core/network/app_services.dart';
-import 'package:tasko/core/network/models/search.dart';
 import 'package:tasko/core/theme/text_styles.dart';
 import 'package:tasko/features/collaboration/presentation/screens/team_details_screen.dart';
+import 'package:tasko/features/collaboration/state/search_provider.dart';
 import 'package:tasko/features/todo/presentation/screens/task_details_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -18,8 +18,6 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _controller = TextEditingController();
   Timer? _debounce;
-  SearchResults? _results;
-  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -30,21 +28,15 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _onQueryChanged(String query) {
     _debounce?.cancel();
+    final provider = Provider.of<SearchProvider>(context, listen: false);
     if (query.trim().isEmpty) {
-      setState(() {
-        _results = null;
-        _isLoading = false;
-      });
+      setState(() {});
+      provider.search('');
       return;
     }
-    setState(() => _isLoading = true);
-    _debounce = Timer(const Duration(milliseconds: 400), () async {
-      final results = await AppServices.instance.searchApi.search(q: query.trim());
-      if (!mounted) return;
-      setState(() {
-        _results = results;
-        _isLoading = false;
-      });
+    setState(() {});
+    _debounce = Timer(const Duration(milliseconds: 400), () {
+      provider.search(query);
     });
   }
 
@@ -53,47 +45,50 @@ class _SearchScreenState extends State<SearchScreen> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        title: Text(
-          l10n.get('search_placeholder'),
-          style: AppTextStyles.heading3.copyWith(color: theme.colorScheme.onSurface),
+    return ChangeNotifierProvider(
+      create: (_) => SearchProvider(),
+      child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: AppBar(
+          backgroundColor: theme.appBarTheme.backgroundColor,
+          title: Text(
+            l10n.get('search_placeholder'),
+            style: AppTextStyles.heading3.copyWith(color: theme.colorScheme.onSurface),
+          ),
+          centerTitle: true,
         ),
-        centerTitle: true,
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(AppSizes.md, AppSizes.sm, AppSizes.md, AppSizes.sm),
-            child: TextField(
-              controller: _controller,
-              autofocus: true,
-              onChanged: _onQueryChanged,
-              decoration: InputDecoration(
-                hintText: l10n.get('search_placeholder'),
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: _controller.text.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.close_rounded),
-                        onPressed: () {
-                          _controller.clear();
-                          _onQueryChanged('');
-                        },
-                      ),
-                filled: true,
-                fillColor: theme.colorScheme.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppSizes.radiusFull),
-                  borderSide: BorderSide.none,
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(AppSizes.md, AppSizes.sm, AppSizes.md, AppSizes.sm),
+              child: TextField(
+                controller: _controller,
+                autofocus: true,
+                onChanged: _onQueryChanged,
+                decoration: InputDecoration(
+                  hintText: l10n.get('search_placeholder'),
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _controller.text.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () {
+                            _controller.clear();
+                            _onQueryChanged('');
+                          },
+                        ),
+                  filled: true,
+                  fillColor: theme.colorScheme.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppSizes.radiusFull),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
             ),
-          ),
-          Expanded(child: _buildBody(context)),
-        ],
+            Expanded(child: _buildBody(context)),
+          ],
+        ),
       ),
     );
   }
@@ -101,16 +96,21 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _buildBody(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final provider = context.watch<SearchProvider>();
 
     if (_controller.text.trim().isEmpty) {
       return _buildMessage(context, Icons.search_rounded, l10n.get('type_to_search'));
     }
-    if (_isLoading) {
+    if (provider.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    final results = _results;
+    final results = provider.results;
     if (results == null) {
-      return _buildMessage(context, Icons.search_off_rounded, l10n.get('no_results'));
+      return _buildMessage(
+        context,
+        Icons.search_off_rounded,
+        provider.errorMessage ?? l10n.get('no_results'),
+      );
     }
     if (results.total == 0) {
       return _buildMessage(context, Icons.search_off_rounded, l10n.get('no_results'));
