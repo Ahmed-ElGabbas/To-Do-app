@@ -53,8 +53,16 @@ Migrate the Flutter app (`antigravity/`) from local-only storage to the NestJS b
 - `npm test`: **266/266 pass across 31 suites**.
 - eslint: only pre-existing warnings, no new issues.
 
-## Known Limitation — Docker
+## Backend verification — local and CI
 
-- **Docker is not installed on this machine**, so the backend's e2e (`npm run test:e2e`) and integration (`npm run test:integration`) suites could not be run locally. These suites require Postgres (and Redis) via `docker compose`.
-- The suites exist and were authored to run against a real database (`test/integration/auth.*`, `test/integration/tasks-teams.*` tenant-isolation tests); CI (`docker-compose.ci.yml`) gates on audit + real Postgres and would exercise them.
-- **Recommendation**: run `npm run test:e2e` and `npm run test:integration` in CI (or on a Docker-capable machine) to complete end-to-end verification of the backend before release.
+- The e2e (`npm run test:e2e`) and integration (`npm run test:integration`) suites
+  run locally against in-memory sqlite with no external services and no Docker:
+  **43/43** and **19/19** passing. The sqlite tier auto-syncs its schema by default
+  (ADR-0004); the shared `test/test-env.ts` bootstrap seeds the env so the suites
+  are self-sufficient regardless of a developer's `.env`.
+- CI additionally gates the real Postgres path: the `postgres` job in
+  `.github/workflows/ci.yml` starts a Postgres 16 service container, runs
+  `migration:run:prod` and `migration:show:prod`, then re-runs the integration and
+  e2e suites against it before the `docker` (image build) job, which depends on it.
+- There is no `docker-compose.ci.yml`; `tasko-backend/docker-compose.yml` defines
+  only the app's own service.
