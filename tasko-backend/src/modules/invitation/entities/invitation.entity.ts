@@ -20,6 +20,10 @@ import { InvitationStatus } from '../constants/invitation-status.enum';
  */
 @Entity('invitations')
 @Index(['teamId', 'email'])
+@Index('UQ_invitations_team_email_pending', ['teamId', 'email'], {
+  unique: true,
+  where: "status = 'pending'",
+})
 export class InvitationEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

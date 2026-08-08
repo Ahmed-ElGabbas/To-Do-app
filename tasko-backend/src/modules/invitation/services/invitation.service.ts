@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
+import { QueryFailedError } from 'typeorm';
 import {
   ConflictError,
   ResourceNotFoundError,
@@ -72,14 +73,29 @@ export class InvitationService {
     }
 
     const rawToken = randomBytes(32).toString('base64url');
-    const invitation = await this.invitations.create({
-      teamId,
-      email,
-      tokenHash: this.hashToken(rawToken),
-      role: dto.role ?? TeamRole.VIEWER,
-      invitedBy,
-      expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
-    });
+    let invitation: InvitationEntity;
+    try {
+      invitation = await this.invitations.create({
+        teamId,
+        email,
+        tokenHash: this.hashToken(rawToken),
+        role: dto.role ?? TeamRole.VIEWER,
+        invitedBy,
+        expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
+      });
+    } catch (error) {
+      // The partial unique index UQ_invitations_team_email_pending is the
+      // schema-level backstop for the application-level pending check above:
+      // a concurrent create() that slips past findPendingByTeamAndEmail is
+      // rejected here and surfaced as the same conflict the client already
+      // knows how to handle.
+      if (isUniqueConstraintViolation(error)) {
+        throw new ConflictError(
+          'An invitation is already pending for this email',
+        );
+      }
+      throw error;
+    }
 
     await this.mailer.sendMail({
       to: email,
@@ -204,4 +220,20 @@ export class InvitationService {
     const link = `${this.config.get<string>('app.baseUrl')}/invitations/${encodeURIComponent(rawToken)}`;
     return `<p>You've been invited to join <strong>${teamName}</strong> on Tasko.</p><a href="${link}">Accept invitation</a>`;
   }
+}
+
+/**
+ * True when a TypeORM query failed because a unique constraint (or unique
+ * index) rejected the write. Driver-dependent codes: Postgres `23505`
+ * (unique_violation), SQLite `SQLITE_CONSTRAINT_UNIQUE` (better-sqlite3).
+ */
+function isUniqueConstraintViolation(error: unknown): boolean {
+  if (!(error instanceof QueryFailedError)) {
+    return false;
+  }
+  const code =
+    error.driverError && typeof error.driverError === 'object'
+      ? (error.driverError as { code?: unknown }).code
+      : undefined;
+  return code === '23505' || code === 'SQLITE_CONSTRAINT_UNIQUE';
 }

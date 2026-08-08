@@ -112,7 +112,7 @@ export class UserService {
       .orderBy('user.createdAt', 'DESC');
     if (q) {
       query.where(
-        '(LOWER(user.email) LIKE LOWER(:q) OR LOWER(user.firstName) LIKE LOWER(:q) OR LOWER(user.lastName) LIKE LOWER(:q))',
+        '(LOWER(user.email) LIKE LOWER(:q) OR LOWER(user.first_name) LIKE LOWER(:q) OR LOWER(user.last_name) LIKE LOWER(:q))',
         { q: `%${q}%` },
       );
     }

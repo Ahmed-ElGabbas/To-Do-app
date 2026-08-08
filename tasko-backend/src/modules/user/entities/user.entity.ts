@@ -21,10 +21,12 @@ export class UserEntity {
   @Column({ name: 'password_hash', length: 255, select: false })
   passwordHash: string;
 
-  @Column({ length: 100 })
+  /** DB column `first_name` (snake_case convention); property stays `firstName`. */
+  @Column({ name: 'first_name', length: 100 })
   firstName: string;
 
-  @Column({ length: 100 })
+  /** DB column `last_name` (snake_case convention); property stays `lastName`. */
+  @Column({ name: 'last_name', length: 100 })
   lastName: string;
 
   @Column({

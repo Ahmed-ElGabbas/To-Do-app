@@ -22,7 +22,10 @@ export class RefreshTokenEntity {
   /**
    * All rotated tokens from one login share a family. If a rotated/revoked
    * token is ever reused, the whole family is revoked (theft signal).
+   * Indexed so the family-revocation query (`WHERE family_id = X`) is an
+   * index seek, not a scan.
    */
+  @Index()
   @Column({ name: 'family_id', type: 'uuid' })
   familyId: string;
 

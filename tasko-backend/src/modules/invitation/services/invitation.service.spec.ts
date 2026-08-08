@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
+import { QueryFailedError } from 'typeorm';
 import { TeamRole } from '../../../common/constants/team-role.enum';
 import { TaskEventType } from '../../../infrastructure/events/task-event';
 import { TaskEventBus } from '../../../infrastructure/events/task-event-bus.service';
@@ -144,6 +145,46 @@ describe('InvitationService', () => {
       await expect(
         service.create(TEAM_ID, INVITER, { email: EMAIL }),
       ).rejects.toMatchObject({ code: 'RESOURCE_NOT_FOUND' });
+    });
+
+    it('maps a unique-index violation on create to the pending-invitation conflict', async () => {
+      teams.findById.mockResolvedValue(team);
+      invitations.findPendingByTeamAndEmail.mockResolvedValue(null);
+      users.findByEmail.mockResolvedValue(null);
+      invitations.create.mockRejectedValue(
+        new QueryFailedError(
+          'INSERT INTO invitations ...',
+          [],
+          Object.assign(new Error('UNIQUE constraint failed'), {
+            code: 'SQLITE_CONSTRAINT_UNIQUE',
+          }),
+        ),
+      );
+
+      await expect(
+        service.create(TEAM_ID, INVITER, { email: EMAIL }),
+      ).rejects.toMatchObject({
+        code: 'CONFLICT',
+        message: 'An invitation is already pending for this email',
+      });
+      expect(mailer.sendMail).not.toHaveBeenCalled();
+    });
+
+    it('re-throws non-unique database errors untouched', async () => {
+      teams.findById.mockResolvedValue(team);
+      invitations.findPendingByTeamAndEmail.mockResolvedValue(null);
+      users.findByEmail.mockResolvedValue(null);
+      invitations.create.mockRejectedValue(
+        new QueryFailedError(
+          'INSERT INTO invitations ...',
+          [],
+          Object.assign(new Error('disk I/O error'), { code: 'SQLITE_ERROR' }),
+        ),
+      );
+
+      await expect(
+        service.create(TEAM_ID, INVITER, { email: EMAIL }),
+      ).rejects.toBeInstanceOf(QueryFailedError);
     });
   });
 

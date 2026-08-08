@@ -24,6 +24,7 @@ import { TeamEntity } from '../../modules/team/entities/team.entity';
 import { UserEntity } from '../../modules/user/entities/user.entity';
 import { allEntities } from '../entities';
 import { BaselineSchema1785801600000 } from './1785801600000-BaselineSchema';
+import { DatabaseFindingsFixes1786147200000 } from './1786147200000-DatabaseFindingsFixes';
 
 const TABLES = [
   'users',
@@ -45,7 +46,7 @@ const TABLES = [
   'task_tags',
 ];
 
-describe('BaselineSchema migration', () => {
+describe('Database schema migrations', () => {
   let dir: string;
   let dataSource: DataSource;
   let user: UserEntity;
@@ -58,7 +59,10 @@ describe('BaselineSchema migration', () => {
       type: 'better-sqlite3',
       database: dbFile,
       entities: [...allEntities],
-      migrations: [BaselineSchema1785801600000],
+      migrations: [
+        BaselineSchema1785801600000,
+        DatabaseFindingsFixes1786147200000,
+      ],
       migrationsRun: true,
       synchronize: false,
     });
@@ -70,10 +74,12 @@ describe('BaselineSchema migration', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('records exactly one applied migration', async () => {
+  it('records every applied migration', async () => {
     const rows = await dataSource.query('SELECT * FROM migrations');
-    expect(rows).toHaveLength(1);
-    expect(rows[0].name).toContain('BaselineSchema1785801600000');
+    expect(rows.map((row) => row.name)).toEqual([
+      'BaselineSchema1785801600000',
+      'DatabaseFindingsFixes1786147200000',
+    ]);
   });
 
   it('creates every table', async () => {

@@ -3,12 +3,9 @@ import {
   CreateDateColumn,
   Entity,
   Index,
-  JoinColumn,
-  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { FileKind } from '../../../common/constants/file-kind.enum';
-import { UserEntity } from '../../user/entities/user.entity';
 
 /**
  * Metadata for a stored object. The bytes themselves live in object storage
@@ -19,13 +16,13 @@ export class FileEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  /**
+   * Owner of the file. A plain, indexed column with no FK to `users`,
+   * matching the "no FK on `user_id`" convention used across the schema.
+   */
   @Index()
   @Column({ name: 'user_id', type: 'uuid' })
   userId: string;
-
-  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
-  user: UserEntity;
 
   @Column({ type: 'varchar', length: 20, default: FileKind.AVATAR })
   kind: FileKind;
