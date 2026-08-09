@@ -204,7 +204,7 @@ describe('TaskService', () => {
           time: '06:30 AM',
           date: '2026-99-99',
         }),
-      ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      ).rejects.toMatchObject({ code: 'BUSINESS_VALIDATION_ERROR' });
     });
   });
 
@@ -269,7 +269,7 @@ describe('TaskService', () => {
       taskQuery.getOwnedTask.mockResolvedValue({ ...baseTask });
       await expect(
         service.update(OWNER, baseTask.id, { date: '2026-02-30' }),
-      ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      ).rejects.toMatchObject({ code: 'BUSINESS_VALIDATION_ERROR' });
     });
   });
 

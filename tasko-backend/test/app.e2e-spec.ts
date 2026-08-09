@@ -1018,6 +1018,24 @@ describe('Tasko API (e2e)', () => {
         .expect(403);
     });
 
+    it('rejects a malformed email when adding a member with 400', async () => {
+      const ownerToken = await signUp('team-bademail@example.com');
+
+      const team = await request(app.getHttpServer())
+        .post('/teams')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ name: 'Bad Email' })
+        .expect(201);
+      const teamId = team.body.data.id;
+
+      const res = await request(app.getHttpServer())
+        .post(`/teams/${teamId}/members`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ email: 'not-an-email' })
+        .expect(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
+
     it('scopes categories, tags, and tasks to the team', async () => {
       const token = await signUp('team-scope@example.com');
 
@@ -1182,7 +1200,7 @@ describe('Tasko API (e2e)', () => {
         .post('/files/avatar')
         .set('Authorization', `Bearer ${token}`)
         .expect(422);
-      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.code).toBe('BUSINESS_VALIDATION_ERROR');
     });
   });
 

@@ -27,7 +27,7 @@ describe('DomainError', () => {
     expect(new ForbiddenActionError().httpStatus).toBe(403);
     expect(new UnauthorizedError().code).toBe('UNAUTHORIZED');
     expect(new UnauthorizedError().httpStatus).toBe(401);
-    expect(new ValidationError('bad').code).toBe('VALIDATION_ERROR');
+    expect(new ValidationError('bad').code).toBe('BUSINESS_VALIDATION_ERROR');
     expect(new ValidationError('bad').httpStatus).toBe(422);
   });
 

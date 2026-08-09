@@ -19,7 +19,8 @@ class ApiException implements Exception {
   /// HTTP status code, when the server responded.
   final int? statusCode;
 
-  /// Backend error code, e.g. `RESOURCE_NOT_FOUND`, `VALIDATION_ERROR`.
+  /// Backend error code, e.g. `RESOURCE_NOT_FOUND`, `VALIDATION_ERROR`,
+  /// `BUSINESS_VALIDATION_ERROR`.
   final String? code;
 
   /// Human readable message from the server (or a fallback).
@@ -129,6 +130,7 @@ String _fallbackMessage(String? code) {
     case 'NOT_FOUND':
       return 'The requested resource was not found.';
     case 'VALIDATION_ERROR':
+    case 'BUSINESS_VALIDATION_ERROR':
       return 'Some of the provided values are invalid.';
     case 'CONFLICT':
       return 'That resource already exists.';

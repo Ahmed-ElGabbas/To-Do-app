@@ -56,7 +56,8 @@ class FakeTaskBackend {
 
     if (method == 'POST') {
       if (failCreate) {
-        return failResponse('VALIDATION_ERROR', 'Invalid task', status: 422);
+        return failResponse(
+            'BUSINESS_VALIDATION_ERROR', 'Invalid task', status: 422);
       }
       lastCreateBody = Map<String, dynamic>.from(options.data as Map);
       final teamMatch = RegExp(r'^/teams/([^/]+)/tasks$').firstMatch(path);

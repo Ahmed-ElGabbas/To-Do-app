@@ -107,7 +107,7 @@ describe('FileService', () => {
 
     it('rejects when no file is present', async () => {
       await expect(service.uploadAvatar(USER, undefined)).rejects.toMatchObject(
-        { code: 'VALIDATION_ERROR' },
+        { code: 'BUSINESS_VALIDATION_ERROR' },
       );
       expect(files.create).not.toHaveBeenCalled();
     });
@@ -115,16 +115,16 @@ describe('FileService', () => {
     it('rejects unsupported mime types', async () => {
       await expect(
         service.uploadAvatar(USER, makeFile({ mimetype: 'text/plain' })),
-      ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      ).rejects.toMatchObject({ code: 'BUSINESS_VALIDATION_ERROR' });
     });
 
     it('rejects empty and oversized files', async () => {
       await expect(
         service.uploadAvatar(USER, makeFile({ size: 0 })),
-      ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      ).rejects.toMatchObject({ code: 'BUSINESS_VALIDATION_ERROR' });
       await expect(
         service.uploadAvatar(USER, makeFile({ size: 6 * 1024 * 1024 })),
-      ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      ).rejects.toMatchObject({ code: 'BUSINESS_VALIDATION_ERROR' });
     });
   });
 

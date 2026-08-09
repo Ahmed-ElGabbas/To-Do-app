@@ -1,4 +1,5 @@
 import {
+  IsEmail,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -11,6 +12,7 @@ import { TeamRole } from '../../../common/constants/team-role.enum';
 export class AddMemberDto {
   @IsString()
   @IsNotEmpty()
+  @IsEmail()
   @MaxLength(255)
   email: string;
 
