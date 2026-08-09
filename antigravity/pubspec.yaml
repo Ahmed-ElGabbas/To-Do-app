@@ -27,6 +27,7 @@ dependencies:
   flutter_secure_storage: ^9.0.0
   crypto: ^3.0.6
   dio: ^5.11.0
+  firebase_core: ^4.13.0
 
 dev_dependencies:
   flutter_test:

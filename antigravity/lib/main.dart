@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -13,10 +14,16 @@ import 'package:tasko/features/collaboration/state/analytics_provider.dart';
 import 'package:tasko/features/collaboration/state/activity_provider.dart';
 import 'package:tasko/features/collaboration/state/admin_provider.dart';
 import 'package:tasko/features/todo/presentation/screens/splash_screen.dart';
+import 'package:tasko/firebase_options.dart';
 import 'package:tasko/shared/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase init (Round 0: inert bootstrap, nothing wired yet).
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   // Fix black nav bar
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
