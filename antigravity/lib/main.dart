@@ -16,6 +16,7 @@ import 'package:tasko/features/collaboration/state/admin_provider.dart';
 import 'package:tasko/features/todo/presentation/screens/splash_screen.dart';
 import 'package:tasko/firebase_options.dart';
 import 'package:tasko/shared/services/notification_service.dart';
+import 'package:tasko/shared/services/push_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,14 +53,29 @@ void main() async {
     await AppServices.instance.tokenStore.clear();
   };
 
+  final taskProvider = TaskProvider()..loadTasks();
+  final authProvider = AuthProvider()..loadUser();
+  final notificationProvider = NotificationProvider();
+
+  // FCM: register handlers + device token, and keep the in-app feed in sync
+  // when a push arrives while the app is foregrounded.
+  final push = PushService();
+  PushService.instance = push;
+  await push.init();
+  push.onForegroundMessage = () {
+    if (!authProvider.isLoggedIn) return;
+    notificationProvider.load();
+    taskProvider.loadTasks();
+  };
+
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => TaskProvider()..loadTasks()),
-        ChangeNotifierProvider(create: (_) => AuthProvider()..loadUser()),
+        ChangeNotifierProvider(create: (_) => taskProvider),
+        ChangeNotifierProvider(create: (_) => authProvider),
         ChangeNotifierProvider(create: (_) => SettingsProvider()..loadSettings()),
         ChangeNotifierProvider(create: (_) => TeamProvider()),
-        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => notificationProvider),
         ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
         ChangeNotifierProvider(create: (_) => ActivityProvider()),
         ChangeNotifierProvider(create: (_) => AdminProvider()),
@@ -79,6 +95,7 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Tasko',
+          navigatorKey: PushService.navigatorKey,
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
           themeMode: settings.isDarkMode ? ThemeMode.dark : ThemeMode.light,

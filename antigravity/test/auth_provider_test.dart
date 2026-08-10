@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
+import 'package:tasko/shared/services/push_service.dart';
 
 import 'core/network/test_services.dart';
 
@@ -62,6 +64,37 @@ Map<String, dynamic> authResultJson({
         isEmailVerified: isEmailVerified,
       ),
       'tokens': {'accessToken': 'access-1', 'refreshToken': 'refresh-1'},
+    };
+
+/// FCM stand-in returning a fixed token so the auth hooks are testable.
+class _AuthTestPushMessaging implements PushMessaging {
+  @override
+  Future<void> requestPermission() async {}
+
+  @override
+  Future<void> setForegroundPresentationOptions() async {}
+
+  @override
+  Future<String?> getToken() async => 'tok-1';
+
+  @override
+  Stream<String> get onTokenRefresh => Stream<String>.empty();
+
+  @override
+  Stream<RemoteMessage> get messages => Stream<RemoteMessage>.empty();
+
+  @override
+  Stream<RemoteMessage> get messageOpenedApp => Stream<RemoteMessage>.empty();
+
+  @override
+  Future<RemoteMessage?> get initialMessage async => null;
+}
+
+Map<String, dynamic> deviceJson(String token) => {
+      'id': 'dev-1',
+      'token': token,
+      'platform': null,
+      'createdAt': '2025-01-01T00:00:00.000Z',
     };
 
 void main() {
@@ -251,6 +284,67 @@ void main() {
 
       expect(auth.isLoggedIn, isFalse);
       expect(backend.storage.refreshToken, isNull);
+    });
+  });
+
+  group('push device registration', () {
+    test('login registers the FCM token with POST /notifications/devices',
+        () async {
+      final registered = <String>[];
+      final backend = TestBackend((options, attempt) {
+        switch ('${options.method} ${options.path}') {
+          case 'POST /auth/login':
+            return ok(authResultJson());
+          case 'POST /notifications/devices':
+            final token =
+                (options.data as Map<String, dynamic>)['token'] as String;
+            registered.add(token);
+            return ok(deviceJson(token));
+          default:
+            throw StateError('unexpected ${options.method} ${options.path}');
+        }
+      });
+      final push = PushService(
+        services: backend.services,
+        pushMessaging: _AuthTestPushMessaging(),
+      );
+      PushService.instance = push;
+      addTearDown(() => PushService.instance = null);
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.login(email: 'test@test.com', password: 'secret');
+
+      expect(result, isTrue);
+      expect(registered, ['tok-1']);
+    });
+
+    test('logout revokes the FCM token with DELETE /notifications/devices',
+        () async {
+      final revoked = <String>[];
+      final backend = TestBackend((options, attempt) {
+        switch ('${options.method} ${options.path}') {
+          case 'POST /auth/logout':
+            return ok(null);
+          case 'DELETE /notifications/devices':
+            revoked.add(
+                (options.data as Map<String, dynamic>)['token'] as String);
+            return ok(null);
+          default:
+            throw StateError('unexpected ${options.method} ${options.path}');
+        }
+      });
+      backend.storage.refreshToken = 'refresh-1';
+      final push = PushService(
+        services: backend.services,
+        pushMessaging: _AuthTestPushMessaging(),
+      );
+      PushService.instance = push;
+      addTearDown(() => PushService.instance = null);
+      final auth = AuthProvider(services: backend.services);
+
+      await auth.logout();
+
+      expect(revoked, ['tok-1']);
     });
   });
 

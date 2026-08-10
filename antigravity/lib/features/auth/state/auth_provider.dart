@@ -4,6 +4,7 @@ import 'package:tasko/core/network/api_error.dart';
 import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/core/network/models/auth.dart';
 import 'package:tasko/core/network/models/user.dart';
+import 'package:tasko/shared/services/push_service.dart';
 
 /// Authenticates against the Tasko backend with JWT access/refresh tokens.
 ///
@@ -87,6 +88,7 @@ class AuthProvider extends ChangeNotifier {
       _profile = await _services.userApi.me();
       _isLoggedIn = true;
       _errorMessage = null;
+      await _syncPushToken();
     } on ApiException {
       _isLoggedIn = false;
       _user = null;
@@ -178,6 +180,7 @@ class AuthProvider extends ChangeNotifier {
     _isLoggedIn = false;
     _user = null;
     _profile = null;
+    await _revokePushToken();
     await _services.tokenStore.clear();
     notifyListeners();
     if (refreshToken != null && refreshToken.isNotEmpty) {
@@ -319,6 +322,23 @@ class AuthProvider extends ChangeNotifier {
       accessToken: result.tokens.accessToken,
       refreshToken: result.tokens.refreshToken,
     );
+    await _syncPushToken();
+  }
+
+  /// Registers the FCM device token with the backend once a session exists.
+  /// No-op when push is not initialized (widget tests); never fails the login.
+  Future<void> _syncPushToken() async {
+    final push = PushService.instance;
+    if (push == null) return;
+    await push.syncCurrentToken();
+  }
+
+  /// Best-effort revokes the FCM device token so a logged-out app no longer
+  /// receives pushes. Runs before the local session is cleared.
+  Future<void> _revokePushToken() async {
+    final push = PushService.instance;
+    if (push == null) return;
+    await push.revokeCurrentToken();
   }
 
   AuthUser _syncUserNames(AuthUser user, UserProfile profile) => AuthUser(

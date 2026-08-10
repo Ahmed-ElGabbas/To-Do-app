@@ -6,6 +6,7 @@ import 'package:tasko/core/localization/app_localizations.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
 import 'package:tasko/features/todo/presentation/widgets/main_scaffold.dart';
 import 'package:tasko/features/auth/presentation/screens/login_screen.dart';
+import 'package:tasko/shared/services/push_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -56,6 +57,12 @@ class _SplashScreenState extends State<SplashScreen>
           transitionDuration: const Duration(milliseconds: 500),
         ),
       );
+
+      // Cold start via a notification tap (terminated state): open the task
+      // once the main scaffold is on screen.
+      if (isLoggedIn) {
+        PushService.instance?.flushPendingRoute();
+      }
     });
   }
 
