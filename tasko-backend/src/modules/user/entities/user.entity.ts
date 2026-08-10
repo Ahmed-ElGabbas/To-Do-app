@@ -6,6 +6,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { AuthProvider } from '../../../common/constants/auth-provider.enum';
 import { Role } from '../../../common/constants/role.enum';
 
 @Entity('users')
@@ -51,6 +52,15 @@ export class UserEntity {
    */
   @Column({ name: 'avatar_file_id', type: 'uuid', nullable: true })
   avatarFileId: string | null;
+
+  /** Creation-time marker: password | google | apple | facebook. */
+  @Column({
+    name: 'auth_provider',
+    type: 'varchar',
+    length: 20,
+    default: AuthProvider.PASSWORD,
+  })
+  authProvider: AuthProvider;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

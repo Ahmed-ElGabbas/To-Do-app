@@ -25,6 +25,7 @@ import { UserEntity } from '../../modules/user/entities/user.entity';
 import { allEntities } from '../entities';
 import { BaselineSchema1785801600000 } from './1785801600000-BaselineSchema';
 import { DatabaseFindingsFixes1786147200000 } from './1786147200000-DatabaseFindingsFixes';
+import { AuthProviderColumn1786400000000 } from './1786400000000-AuthProviderColumn';
 
 const TABLES = [
   'users',
@@ -62,6 +63,7 @@ describe('Database schema migrations', () => {
       migrations: [
         BaselineSchema1785801600000,
         DatabaseFindingsFixes1786147200000,
+        AuthProviderColumn1786400000000,
       ],
       migrationsRun: true,
       synchronize: false,
@@ -79,7 +81,15 @@ describe('Database schema migrations', () => {
     expect(rows.map((row) => row.name)).toEqual([
       'BaselineSchema1785801600000',
       'DatabaseFindingsFixes1786147200000',
+      'AuthProviderColumn1786400000000',
     ]);
+  });
+
+  it('exposes the auth_provider column with its password default', async () => {
+    const rows = await dataSource.query(`PRAGMA table_info('users')`);
+    const column = rows.find((row) => row.name === 'auth_provider');
+    expect(column).toBeDefined();
+    expect(column.dflt_value).toContain('password');
   });
 
   it('creates every table', async () => {

@@ -1306,6 +1306,14 @@ describe('Tasko API (e2e)', () => {
   describe('analytics', () => {
     it('summarizes personal completion, priority, and overdue', async () => {
       const token = await signUp('analytics-personal@example.com');
+      const isoDaysFromNow = (days: number) => {
+        const d = new Date();
+        d.setDate(d.getDate() + days);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
       const create = (title: string, date: string, priority: string) =>
         request(app.getHttpServer())
           .post('/tasks')
@@ -1313,14 +1321,14 @@ describe('Tasko API (e2e)', () => {
           .send({ title, time: '09:00 AM', date, priority })
           .expect(201);
 
-      const done = await create('Done high', '2026-08-01', 'high');
+      const done = await create('Done high', isoDaysFromNow(-2), 'high');
       await request(app.getHttpServer())
         .patch(`/tasks/${done.body.data.id}/done`)
         .set('Authorization', `Bearer ${token}`)
         .send({ isDone: true })
         .expect(200);
-      await create('Pending medium', '2026-08-10', 'medium');
-      await create('Overdue low', '2000-01-01', 'low');
+      await create('Pending medium', isoDaysFromNow(1), 'medium');
+      await create('Overdue low', isoDaysFromNow(-1), 'low');
 
       const res = await request(app.getHttpServer())
         .get('/analytics')

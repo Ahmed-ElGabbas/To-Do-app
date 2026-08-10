@@ -45,6 +45,7 @@
     "bullmq": "^5.81.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "firebase-admin": "^14.2.0",
     "ioredis": "^5.11.1",
     "joi": "^18.2.3",
     "nodemailer": "^9.0.3",
@@ -93,6 +94,10 @@
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "moduleNameMapper": {
+      "^firebase-admin/app$": "<rootDir>/../test/mocks/firebase-admin-app.stub.ts",
+      "^firebase-admin/auth$": "<rootDir>/../test/mocks/firebase-admin-auth.stub.ts"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

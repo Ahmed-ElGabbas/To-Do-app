@@ -48,4 +48,10 @@ export const validationSchema = Joi.object({
   S3_SECRET_ACCESS_KEY: Joi.string().allow('').default(''),
   S3_ENDPOINT: Joi.string().allow('').default(''),
   S3_PRESIGN_TTL_SECONDS: Joi.number().integer().min(60).default(3600),
+
+  // Firebase (social login). Empty by default so local dev/test boot without
+  // credentials; the FirebaseAdminService lazy-initializes on first use.
+  FIREBASE_PROJECT_ID: Joi.string().allow('').default(''),
+  FIREBASE_SERVICE_ACCOUNT_PATH: Joi.string().allow('').default(''),
+  FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().allow('').default(''),
 });

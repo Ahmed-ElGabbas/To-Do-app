@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResourceNotFoundError } from '../../common/errors/domain-error';
 import { Role } from '../../common/constants/role.enum';
+import { AuthProvider } from '../../common/constants/auth-provider.enum';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { toUserOutput, UserOutput } from './dto/user-output.dto';
 import { UserEntity } from './entities/user.entity';
@@ -68,6 +69,11 @@ export class UserService {
     firstName: string;
     lastName: string;
     role?: Role;
+    /**
+     * Creation-time sign-in method. Defaults to `password` via the column
+     * default; social signups pass the verified provider explicitly.
+     */
+    authProvider?: AuthProvider;
   }): Promise<UserEntity> {
     const user = this.userRepository.create(input);
     return this.userRepository.save(user);

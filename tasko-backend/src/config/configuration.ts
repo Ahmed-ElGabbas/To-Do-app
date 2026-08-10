@@ -59,4 +59,15 @@ export default () => ({
       10,
     ),
   },
+  firebase: {
+    projectId: process.env.FIREBASE_PROJECT_ID ?? '',
+    /**
+     * Path to the Firebase service-account JSON file. Either this or the
+     * base64-encoded FIREBASE_SERVICE_ACCOUNT_JSON must be set for social
+     * login. When both are empty the FirebaseAdminService stays uninitialized
+     * (social login rejects requests) so dev/test boot without credentials.
+     */
+    serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? '',
+    serviceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '',
+  },
 });

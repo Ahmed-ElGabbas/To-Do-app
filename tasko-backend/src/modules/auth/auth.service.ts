@@ -11,7 +11,9 @@ import {
   UnauthorizedError,
 } from '../../common/errors/domain-error';
 import { Role } from '../../common/constants/role.enum';
+import { AuthProvider } from '../../common/constants/auth-provider.enum';
 import { MailerService } from '../../infrastructure/mailer/mailer.service';
+import { FirebaseAdminService } from '../../infrastructure/firebase/firebase-admin.service';
 import { UserService } from '../user/user.service';
 import { UserEntity } from '../user/entities/user.entity';
 import { EmailVerificationTokenEntity } from './entities/email-verification-token.entity';
@@ -20,6 +22,7 @@ import { RefreshTokenEntity } from './entities/refresh-token.entity';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SignupDto } from './dto/signup.dto';
+import { SocialLoginDto, SocialProvider } from './dto/social-login.dto';
 
 export interface AuthTokens {
   accessToken: string;
@@ -39,6 +42,20 @@ export interface PublicUser {
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
+/** Maps a requested social provider to its Firebase `sign_in_provider` value. */
+const SIGN_IN_PROVIDER: Record<SocialProvider, string> = {
+  [SocialProvider.GOOGLE]: 'google.com',
+  [SocialProvider.APPLE]: 'apple.com',
+  [SocialProvider.FACEBOOK]: 'facebook.com',
+};
+
+/** Maps a requested social provider to the persisted `auth_provider` value. */
+const AUTH_PROVIDER_BY_SOCIAL: Record<SocialProvider, AuthProvider> = {
+  [SocialProvider.GOOGLE]: AuthProvider.GOOGLE,
+  [SocialProvider.APPLE]: AuthProvider.APPLE,
+  [SocialProvider.FACEBOOK]: AuthProvider.FACEBOOK,
+};
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -46,6 +63,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     private readonly mailer: MailerService,
+    private readonly firebaseAdmin: FirebaseAdminService,
     @InjectRepository(RefreshTokenEntity)
     private readonly refreshRepo: Repository<RefreshTokenEntity>,
     @InjectRepository(EmailVerificationTokenEntity)
@@ -53,6 +71,54 @@ export class AuthService {
     @InjectRepository(PasswordResetTokenEntity)
     private readonly resetRepo: Repository<PasswordResetTokenEntity>,
   ) {}
+
+  /**
+   * Signs in with a Firebase-verified social identity. The ID token is
+   * verified server-side, its `sign_in_provider` is matched against the
+   * requested provider, and a verified email is required. The account is then
+   * found-or-created and the same token pair as a password login is issued.
+   * New accounts get `authProvider` set and email marked verified; existing
+   * accounts simply log in (their provider column is never overwritten).
+   */
+  async socialLogin(
+    dto: SocialLoginDto,
+  ): Promise<{ user: PublicUser; tokens: AuthTokens }> {
+    const decoded = await this.firebaseAdmin.verifyIdToken(dto.idToken);
+
+    if (decoded.firebase?.sign_in_provider !== SIGN_IN_PROVIDER[dto.provider]) {
+      throw new UnauthorizedError(
+        'Token provider does not match the requested social provider',
+      );
+    }
+    if (!decoded.email || !decoded.email_verified) {
+      throw new UnauthorizedError(
+        'The social account has no verified email address',
+      );
+    }
+
+    const email = decoded.email.trim().toLowerCase();
+    let user = await this.userService.findByEmail(email);
+
+    if (!user) {
+      user = await this.userService.create({
+        email,
+        passwordHash: await argon2.hash(randomBytes(24).toString('base64url')),
+        firstName: decoded.given_name ?? decoded.name?.split(' ')[0] ?? '',
+        lastName:
+          decoded.family_name ??
+          decoded.name?.split(' ').slice(1).join(' ') ??
+          '',
+        role: Role.USER,
+        authProvider: AUTH_PROVIDER_BY_SOCIAL[dto.provider],
+      });
+      await this.userService.markEmailVerified(user.id);
+      user = (await this.userService.findById(user.id))!;
+    }
+
+    await this.userService.touchLastLogin(user.id);
+    const tokens = await this.issueTokens(user.id);
+    return { user: this.toPublic(user), tokens };
+  }
 
   async signup(
     dto: SignupDto,

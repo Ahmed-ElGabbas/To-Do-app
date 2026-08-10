@@ -1,6 +1,8 @@
 export { DatabaseModule } from './database/database.module';
 export { CacheModule } from './cache/cache.module';
 export { CacheService } from './cache/cache.service';
+export { FirebaseModule } from './firebase/firebase.module';
+export { FirebaseAdminService } from './firebase/firebase-admin.service';
 export { QueueModule } from './queue/queue.module';
 export { QueueService } from './queue/queue.service';
 export { MailerModule } from './mailer/mailer.module';

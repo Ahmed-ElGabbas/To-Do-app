@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MailerModule } from '../../infrastructure/mailer/mailer.module';
+import { FirebaseModule } from '../../infrastructure/firebase/firebase.module';
 import { UserModule } from '../user/user.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -15,6 +16,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   imports: [
     UserModule,
     MailerModule,
+    FirebaseModule,
     PassportModule,
     JwtModule.register({}),
     TypeOrmModule.forFeature([

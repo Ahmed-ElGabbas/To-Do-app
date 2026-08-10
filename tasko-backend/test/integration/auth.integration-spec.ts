@@ -247,3 +247,130 @@ describe('auth integration', () => {
       .expect(401);
   });
 });
+
+describe('auth social login (Firebase stubbed)', () => {
+  let ctx: IntegrationContext;
+  const verifyIdToken = jest.fn();
+
+  const auth = (token: string) => ({
+    Authorization: `Bearer ${token}`,
+  });
+
+  const googleToken = {
+    uid: 'firebase-uid-social',
+    email: 'social-user@example.com',
+    email_verified: true,
+    name: 'Social User',
+    given_name: 'Social',
+    family_name: 'User',
+    firebase: { sign_in_provider: 'google.com' },
+  };
+
+  beforeAll(async () => {
+    ctx = await bootstrapApp({ firebaseAdmin: { verifyIdToken } });
+  });
+
+  afterAll(async () => {
+    await ctx.app.close();
+  });
+
+  beforeEach(() => {
+    verifyIdToken.mockReset();
+    verifyIdToken.mockResolvedValue(googleToken);
+    ctx.mailer.clearSentMessages();
+    ctx.throttlerStorage.storage.clear();
+  });
+
+  it('creates an email-verified account from a Google token and reuses it on later sign-ins', async () => {
+    const res = await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'google', idToken: 'id-token-123' })
+      .expect(200);
+
+    expect(res.body.data.user.email).toBe('social-user@example.com');
+    expect(res.body.data.user.isEmailVerified).toBe(true);
+    expect(res.body.data.tokens.accessToken).toBeTruthy();
+    expect(res.body.data.tokens.refreshToken).toBeTruthy();
+
+    const me = await request(ctx.http)
+      .get('/auth/me')
+      .set(auth(res.body.data.tokens.accessToken))
+      .expect(200);
+    expect(me.body.data.email).toBe('social-user@example.com');
+
+    // The social account has no usable password.
+    await request(ctx.http)
+      .post('/auth/login')
+      .send({ email: 'social-user@example.com', password: 'password123' })
+      .expect(401);
+
+    // Second sign-in links to the existing account instead of failing/duplicating.
+    await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'google', idToken: 'id-token-123' })
+      .expect(200);
+  });
+
+  it('links an existing password account without marking its email verified', async () => {
+    await signUp(ctx.http, 'social-dup@example.com');
+
+    verifyIdToken.mockResolvedValue({
+      ...googleToken,
+      uid: 'firebase-uid-2',
+      email: 'social-dup@example.com',
+      name: 'Social Dup',
+      given_name: 'Social',
+      family_name: 'Dup',
+    });
+
+    const res = await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'google', idToken: 'id-token-456' })
+      .expect(200);
+
+    const me = await request(ctx.http)
+      .get('/auth/me')
+      .set(auth(res.body.data.tokens.accessToken))
+      .expect(200);
+    expect(me.body.data.email).toBe('social-dup@example.com');
+    expect(me.body.data.isEmailVerified).toBe(false);
+
+    // Password login still works for the pre-existing account.
+    await request(ctx.http)
+      .post('/auth/login')
+      .send({ email: 'social-dup@example.com', password: 'password123' })
+      .expect(200);
+  });
+
+  it('rejects a token whose provider does not match the request', async () => {
+    const res = await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'apple', idToken: 'id-token-apple' })
+      .expect(401);
+    expect(res.body.error.code).toBe('UNAUTHORIZED');
+  });
+
+  it('rejects a token without a verified email claim', async () => {
+    verifyIdToken.mockResolvedValue({ ...googleToken, email_verified: false });
+    const res = await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'google', idToken: 'id-token-unverified' })
+      .expect(401);
+    expect(res.body.error.code).toBe('UNAUTHORIZED');
+  });
+
+  it('rejects invalid payloads with a 400', async () => {
+    await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'google' })
+      .expect(400);
+    await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ idToken: 'abc' })
+      .expect(400);
+    await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'microsoft', idToken: 'abc' })
+      .expect(400);
+  });
+});

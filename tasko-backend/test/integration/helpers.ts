@@ -11,6 +11,7 @@ import { Test } from '@nestjs/testing';
 import { ThrottlerStorageService } from '@nestjs/throttler/dist/throttler.service';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
+import { FirebaseAdminService } from '../../src/infrastructure/firebase/firebase-admin.service';
 import { LogMailerService } from '../../src/infrastructure/mailer/log-mailer.service';
 import { MailerService } from '../../src/infrastructure/mailer/mailer.service';
 
@@ -25,11 +26,30 @@ export interface IntegrationContext {
   http: ReturnType<INestApplication['getHttpServer']>;
 }
 
+export interface BootstrapOptions {
+  /**
+   * Replaces the real FirebaseAdminService (which needs live credentials).
+   * Integration specs that exercise POST /auth/social-login must pass a stub
+   * whose `verifyIdToken` resolves to a forged DecodedIdToken.
+   */
+  firebaseAdmin?: Partial<FirebaseAdminService>;
+}
+
 /** Boots the full AppModule against an isolated in-memory sqlite database. */
-export async function bootstrapApp(): Promise<IntegrationContext> {
-  const moduleRef = await Test.createTestingModule({
+export async function bootstrapApp(
+  options: BootstrapOptions = {},
+): Promise<IntegrationContext> {
+  const builder = Test.createTestingModule({
     imports: [AppModule],
-  }).compile();
+  });
+
+  if (options.firebaseAdmin) {
+    builder
+      .overrideProvider(FirebaseAdminService)
+      .useValue(options.firebaseAdmin);
+  }
+
+  const moduleRef = await builder.compile();
 
   const app = moduleRef.createNestApplication();
   app.useGlobalPipes(

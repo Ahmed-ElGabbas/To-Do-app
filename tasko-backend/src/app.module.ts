@@ -17,6 +17,7 @@ import { validationSchema } from './config/validation.schema';
 import { CacheModule } from './infrastructure/cache/cache.module';
 import { DatabaseModule } from './infrastructure/database/database.module';
 import { TaskEventsModule } from './infrastructure/events/task-events.module';
+import { FirebaseModule } from './infrastructure/firebase/firebase.module';
 import { MailerModule } from './infrastructure/mailer/mailer.module';
 import { PushModule } from './infrastructure/push/push.module';
 import { QueueModule } from './infrastructure/queue/queue.module';
@@ -66,6 +67,7 @@ import { UserModule } from './modules/user/user.module';
     TaskEventsModule.forRoot(),
     MailerModule,
     PushModule,
+    FirebaseModule,
     HealthModule,
     UserModule,
     AuthModule,

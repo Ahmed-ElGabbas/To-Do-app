@@ -4,10 +4,13 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import { UnauthorizedError } from '../../common/errors/domain-error';
+import { AuthProvider } from '../../common/constants/auth-provider.enum';
 import { Role } from '../../common/constants/role.enum';
+import { FirebaseAdminService } from '../../infrastructure/firebase/firebase-admin.service';
 import { MailerService } from '../../infrastructure/mailer/mailer.service';
 import { UserService } from '../user/user.service';
 import { AuthService } from './auth.service';
+import { SocialProvider } from './dto/social-login.dto';
 import { EmailVerificationTokenEntity } from './entities/email-verification-token.entity';
 import { PasswordResetTokenEntity } from './entities/password-reset-token.entity';
 import { RefreshTokenEntity } from './entities/refresh-token.entity';
@@ -27,6 +30,7 @@ describe('AuthService', () => {
     markEmailVerified: jest.fn(),
   };
   const mailer = { sendMail: jest.fn() };
+  const firebaseAdmin = { verifyIdToken: jest.fn() };
   const refreshRepo = {
     findOne: jest.fn(),
     insert: jest.fn(),
@@ -75,6 +79,7 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: new JwtService({}) },
         { provide: ConfigService, useValue: config },
         { provide: MailerService, useValue: mailer },
+        { provide: FirebaseAdminService, useValue: firebaseAdmin },
         {
           provide: getRepositoryToken(RefreshTokenEntity),
           useValue: refreshRepo,
@@ -304,6 +309,122 @@ describe('AuthService', () => {
         service.resetPassword({
           token: 'reset-token',
           newPassword: 'newpassword123',
+        }),
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    });
+  });
+
+  describe('socialLogin', () => {
+    const googleToken = {
+      uid: 'firebase-uid-1',
+      email: 'carol@gmail.com',
+      email_verified: true,
+      name: 'Carol Gmail',
+      given_name: 'Carol',
+      family_name: 'Gmail',
+      firebase: { sign_in_provider: 'google.com' },
+    };
+
+    it('creates a new account from a verified Google token', async () => {
+      firebaseAdmin.verifyIdToken.mockResolvedValue(googleToken);
+      userService.findByEmail.mockResolvedValue(null);
+      userService.create.mockResolvedValue({
+        ...user,
+        email: googleToken.email,
+      });
+      userService.findById.mockResolvedValue({
+        ...user,
+        email: googleToken.email,
+        isEmailVerified: true,
+      });
+
+      const result = await service.socialLogin({
+        provider: SocialProvider.GOOGLE,
+        idToken: 'token-1',
+      });
+
+      const input = userService.create.mock.calls[0][0];
+      expect(input.email).toBe('carol@gmail.com');
+      expect(input.authProvider).toBe(AuthProvider.GOOGLE);
+      expect(input.role).toBe(Role.USER);
+      expect(input.firstName).toBe('Carol');
+      expect(input.lastName).toBe('Gmail');
+      expect(userService.markEmailVerified).toHaveBeenCalledWith(user.id);
+      expect(userService.touchLastLogin).toHaveBeenCalledWith(user.id);
+      expect(result.tokens.accessToken).toBeTruthy();
+      expect(result.tokens.refreshToken).toBeTruthy();
+      expect(result.user.email).toBe('carol@gmail.com');
+      expect(result.user.isEmailVerified).toBe(true);
+    });
+
+    it('links to an existing account without re-creating or re-verifying it', async () => {
+      firebaseAdmin.verifyIdToken.mockResolvedValue(googleToken);
+      userService.findByEmail.mockResolvedValue(user);
+
+      const result = await service.socialLogin({
+        provider: SocialProvider.GOOGLE,
+        idToken: 'token-1',
+      });
+
+      expect(userService.create).not.toHaveBeenCalled();
+      expect(userService.markEmailVerified).not.toHaveBeenCalled();
+      expect(userService.touchLastLogin).toHaveBeenCalledWith(user.id);
+      expect(result.tokens.accessToken).toBeTruthy();
+    });
+
+    it('rejects a token whose provider does not match the request', async () => {
+      firebaseAdmin.verifyIdToken.mockResolvedValue({
+        ...googleToken,
+        firebase: { sign_in_provider: 'apple.com' },
+      });
+
+      await expect(
+        service.socialLogin({
+          provider: SocialProvider.GOOGLE,
+          idToken: 'token-1',
+        }),
+      ).rejects.toBeInstanceOf(UnauthorizedError);
+      expect(userService.findByEmail).not.toHaveBeenCalled();
+    });
+
+    it('rejects a token without a verified email claim', async () => {
+      firebaseAdmin.verifyIdToken.mockResolvedValue({
+        ...googleToken,
+        email_verified: false,
+      });
+
+      await expect(
+        service.socialLogin({
+          provider: SocialProvider.GOOGLE,
+          idToken: 'token-1',
+        }),
+      ).rejects.toBeInstanceOf(UnauthorizedError);
+      expect(userService.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid or expired ID token', async () => {
+      firebaseAdmin.verifyIdToken.mockRejectedValue(
+        new UnauthorizedError('Invalid or expired sign-in token'),
+      );
+
+      await expect(
+        service.socialLogin({
+          provider: SocialProvider.GOOGLE,
+          idToken: 'expired-token',
+        }),
+      ).rejects.toBeInstanceOf(UnauthorizedError);
+      expect(userService.findByEmail).not.toHaveBeenCalled();
+    });
+
+    it('rejects when Firebase is not configured', async () => {
+      firebaseAdmin.verifyIdToken.mockRejectedValue(
+        new UnauthorizedError('Social login is not configured on this server'),
+      );
+
+      await expect(
+        service.socialLogin({
+          provider: SocialProvider.APPLE,
+          idToken: 'any',
         }),
       ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
     });
