@@ -8,6 +8,8 @@ import 'package:tasko/core/theme/text_styles.dart';
 import 'package:tasko/core/localization/app_localizations.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
+import 'package:tasko/features/auth/presentation/widgets/google_sign_in_button.dart';
+import 'package:tasko/features/auth/services/google_sign_in_service.dart';
 import 'package:tasko/features/todo/presentation/widgets/main_scaffold.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -30,6 +32,7 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _isLoading = false;
   String? _profileImagePath;
   String? _errorMessage;
+  final _googleSignIn = GoogleSignInService();
 
   @override
   void dispose() {
@@ -123,6 +126,46 @@ class _SignupScreenState extends State<SignupScreen> {
       MaterialPageRoute(builder: (_) => const MainScaffold()),
       (_) => false,
     );
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    final auth = context.read<AuthProvider>();
+    final l10n = AppLocalizations.of(context);
+    try {
+      final idToken = await _googleSignIn.getFirebaseIdToken();
+      if (!mounted) return;
+      final success = await auth.socialLogin(
+        idToken: idToken,
+        provider: 'google',
+      );
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      if (success) {
+        await context.read<TaskProvider>().loadTasks();
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainScaffold()),
+          (_) => false,
+        );
+      } else {
+        setState(
+          () => _errorMessage = auth.errorMessage ?? l10n.get('google_sign_in_failed'),
+        );
+      }
+    } on GoogleSignInCancelledException {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    } on Exception {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = l10n.get('google_sign_in_failed');
+      });
+    }
   }
 
   @override
@@ -334,6 +377,27 @@ class _SignupScreenState extends State<SignupScreen> {
                             style: AppTextStyles.button,
                           ),
                   ),
+                ),
+                const SizedBox(height: AppSizes.xl),
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: theme.dividerColor)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSizes.sm),
+                      child: Text(
+                        l10n.get('or'),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: theme.dividerColor)),
+                  ],
+                ),
+                const SizedBox(height: AppSizes.xl),
+                GoogleSignInButton(
+                  onPressed: _signInWithGoogle,
+                  isLoading: _isLoading,
                 ),
                 const SizedBox(height: AppSizes.xl),
                 Row(

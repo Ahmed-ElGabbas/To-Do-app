@@ -148,6 +148,29 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Signs in with a Firebase ID token from a social provider (`google`,
+  /// `apple`, `facebook`). The backend verifies the token and links/creates the
+  /// account by verified email.
+  Future<bool> socialLogin({
+    required String idToken,
+    required String provider,
+  }) async {
+    _errorMessage = null;
+    try {
+      final result = await _services.authApi.socialLogin(
+        idToken: idToken,
+        provider: provider,
+      );
+      await _applyAuthResult(result);
+      _isLoggedIn = true;
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
+      return false;
+    }
+  }
+
   /// Signs out locally and best-effort revokes the refresh session on the
   /// backend so the token family cannot be replayed.
   Future<void> logout() async {

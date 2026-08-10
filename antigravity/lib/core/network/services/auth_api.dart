@@ -38,6 +38,19 @@ class AuthApi {
     );
   }
 
+  Future<AuthResult> socialLogin({
+    required String idToken,
+    required String provider,
+  }) async {
+    final response = await _client.post('/auth/social-login', data: {
+      'idToken': idToken,
+      'provider': provider,
+    });
+    return AuthResult.fromJson(
+      _client.unwrap(response) as Map<String, dynamic>,
+    );
+  }
+
   Future<AuthTokens> refresh(String refreshToken) async {
     final response = await _client.post('/auth/refresh', data: {
       'refreshToken': refreshToken,
