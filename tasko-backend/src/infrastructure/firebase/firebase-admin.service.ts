@@ -9,6 +9,7 @@ import {
   type ServiceAccount,
 } from 'firebase-admin/app';
 import { getAuth, type Auth, type DecodedIdToken } from 'firebase-admin/auth';
+import { getMessaging, type Messaging } from 'firebase-admin/messaging';
 import { UnauthorizedError } from '../../common/errors/domain-error';
 import { LoggerService } from '../../common/logger/logger.service';
 
@@ -44,6 +45,26 @@ export class FirebaseAdminService {
       });
       throw new UnauthorizedError('Invalid or expired sign-in token');
     }
+  }
+
+  /**
+   * True when Firebase credentials are configured, so callers can choose the
+   * Firebase-backed implementation over a fallback without triggering SDK init.
+   */
+  isConfigured(): boolean {
+    return Boolean(
+      this.config.get<string>('firebase.projectId') &&
+      (this.config.get<string>('firebase.serviceAccountPath') ||
+        this.config.get<string>('firebase.serviceAccountJson')),
+    );
+  }
+
+  /**
+   * Returns the default app's Messaging client (used for push notifications),
+   * initializing the SDK lazily on first use.
+   */
+  getMessaging(): Messaging {
+    return getMessaging(this.ensureInitialized());
   }
 
   private getAuth(): Auth {

@@ -18,4 +18,7 @@ export abstract class DeviceTokenRepository {
   abstract save(entity: UserDeviceEntity): Promise<UserDeviceEntity>;
 
   abstract remove(entity: UserDeviceEntity): Promise<void>;
+
+  /** Deletes every device whose token is in the given set; returns the count removed. */
+  abstract removeByTokens(tokens: string[]): Promise<number>;
 }

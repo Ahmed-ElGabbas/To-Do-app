@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { LoggerModule } from '../../common/logger/logger.module';
 import { TaskEventsModule } from '../../infrastructure/events/task-events.module';
@@ -18,7 +18,7 @@ import { NotificationService } from './services/notification.service';
     LoggerModule,
     TypeOrmModule.forFeature([NotificationEntity, UserDeviceEntity]),
     TaskEventsModule,
-    PushModule,
+    forwardRef(() => PushModule),
   ],
   controllers: [NotificationController],
   providers: [
@@ -33,5 +33,6 @@ import { NotificationService } from './services/notification.service';
       useClass: TypeOrmDeviceTokenRepository,
     },
   ],
+  exports: [DeviceTokenRepository],
 })
 export class NotificationModule {}

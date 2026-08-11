@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { UserDeviceEntity } from '../entities/user-device.entity';
 import {
   CreateDeviceData,
@@ -34,5 +34,10 @@ export class TypeOrmDeviceTokenRepository extends DeviceTokenRepository {
 
   async remove(entity: UserDeviceEntity): Promise<void> {
     await this.repo.remove(entity);
+  }
+
+  async removeByTokens(tokens: string[]): Promise<number> {
+    const result = await this.repo.delete({ token: In(tokens) });
+    return result.affected ?? 0;
   }
 }

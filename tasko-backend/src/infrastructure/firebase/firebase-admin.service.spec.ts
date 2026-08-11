@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { getMessaging } from 'firebase-admin/messaging';
 import { UnauthorizedError } from '../../common/errors/domain-error';
 import { LoggerService } from '../../common/logger/logger.service';
 import { FirebaseAdminService } from './firebase-admin.service';
@@ -113,5 +114,30 @@ describe('FirebaseAdminService', () => {
     await expect(service.verifyIdToken('token')).rejects.toBeInstanceOf(
       UnauthorizedError,
     );
+  });
+
+  it('reports whether Firebase credentials are configured', () => {
+    expect(buildService({}).isConfigured()).toBe(false);
+    expect(
+      buildService({
+        'firebase.projectId': 'tasko-test',
+        'firebase.serviceAccountJson': '{}',
+      }).isConfigured(),
+    ).toBe(true);
+  });
+
+  it('exposes the messaging client, initializing lazily', () => {
+    getApps.mockReturnValue([]);
+    initializeApp.mockReturnValue(stubApp);
+    getMessaging.mockReturnValue({ sendEachForMulticast: jest.fn() });
+
+    const service = buildService({
+      'firebase.projectId': 'tasko-test',
+      'firebase.serviceAccountJson': '{}',
+    });
+
+    expect(service.getMessaging()).toBeDefined();
+    expect(initializeApp).toHaveBeenCalledTimes(1);
+    expect(getMessaging).toHaveBeenCalled();
   });
 });

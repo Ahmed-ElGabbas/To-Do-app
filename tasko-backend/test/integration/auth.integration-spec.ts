@@ -267,7 +267,9 @@ describe('auth social login (Firebase stubbed)', () => {
   };
 
   beforeAll(async () => {
-    ctx = await bootstrapApp({ firebaseAdmin: { verifyIdToken } });
+    ctx = await bootstrapApp({
+      firebaseAdmin: { verifyIdToken, isConfigured: () => false },
+    });
   });
 
   afterAll(async () => {
