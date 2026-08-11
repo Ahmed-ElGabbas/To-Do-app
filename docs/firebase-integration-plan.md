@@ -55,8 +55,14 @@ user_devices table already has the right shape (token varchar(512) unique, platf
 ## 4. Firebase Storage — NOT BUILDING (Decision 3, Part 2)
 The existing local/s3 StorageService drivers remain the only two. Do not add a firebase driver.
 
-## 5. Crashlytics — Architecture (later round)
+## 5. Crashlytics — Architecture (later round) — DONE (Round 3)
 Flutter-side only, no backend surface. Initialize in main.dart after Firebase.initializeApp(); FlutterError.onError + PlatformDispatcher.instance.onError handlers. setUserIdentifier(userId) (UUID, never email) + custom key for active teamId — matching the backend's existing no-PII logging discipline.
+
+**Flutter status — DONE** (firebase_crashlytics 5.2.7):
+- `CrashlyticsService` (`lib/shared/services/crashlytics_service.dart`) — `init()` installs both fatal-error handlers (FlutterError.onError → recordFlutterFatalError, PlatformDispatcher.onError → recordError) behind an injectable `CrashReporter` facade so nothing is constructed in widget tests; `CrashlyticsService.instance` is null in tests so provider hooks no-op.
+- `AuthProvider` attaches `setUserIdentifier(userId)` (the backend UUID, never email) on restore/login/signup/socialLogin and clears it (`''`) on logout.
+- `TeamProvider` attaches `setCustomKey('active_team_id', …)` (id only, never the team name) on load/select/create/update/delete; `'none'` when no team is selected.
+- Verification: `flutter analyze` clean, `flutter test` 137/137 pass, `flutter build apk --debug` succeeds.
 
 ## 6. Deep Linking for Invitations — Architecture (later round) — NOT Dynamic Links
 Firebase Dynamic Links is fully shut down (since Aug 25, 2025) — confirmed live, do not use it. Use native Android App Links + iOS Universal Links instead (assetlinks.json / apple-app-site-association served from APP_BASE_URL/.well-known/). No change needed to InvitationService's link generation — the existing /invitations/:token path is already what App Links intercept. Deferred linking (auto-resume after install) is a real, separate gap — optional GET /invitations/pending?email= endpoint can close it later if wanted.
@@ -67,8 +73,13 @@ Five flags: collaboration_features_enabled, search_min_query_length, max_task_no
 ## 8. Firebase App Check — Architecture (later round, deliberately last)
 Layers on top of, never instead of, JWT auth + Throttler. New AppCheckGuard in the same APP_GUARD chain, positioned before JwtAuthGuard. Start in monitor mode (not enforce) since firebase_app_check is still pre-1.0.
 
-## 9. Performance Monitoring — Architecture (later round)
+## 9. Performance Monitoring — Architecture (later round) — DONE (Round 3)
 Flutter-side; custom traces around task-list load, SearchProvider's query round-trip, avatar upload.
+
+**Flutter status — DONE** (firebase_performance 0.11.4):
+- `PerformanceService` (`lib/shared/services/performance_service.dart`) — static `trace(name, action)` runs the action inside a named `FirebasePerformance.instance.newTrace` (start/stop with a `finally` stop so timings flush even on throw), or runs the action directly when not initialized (widget tests). Injectable `PerformanceMonitor` facade keeps providers unit-testable.
+- Trace points: `task_list_load` (TaskProvider.loadTasks), `search_query` (SearchProvider.search), `avatar_upload` (AuthProvider.uploadAvatar). Trace names only — no task titles/query text as attributes.
+- Verification: `flutter analyze` clean, `flutter test` 137/137 pass, `flutter build apk --debug` succeeds.
 
 ## 10. Analytics — Architecture (later round)
 Must NOT duplicate activity_logs' audit purpose — aggregate product-usage signal only. Events: task_created, team_created, invitation_sent, invitation_accepted, comment_added, search_performed (result_count only, never raw query text), social_login_used (provider param). Never log task titles/comment bodies/search text as event params.
@@ -84,8 +95,8 @@ Round 0 (DONE): project setup, identifiers, inert Firebase init.
 Round 1 (NOW): Google Social Login — the highest-value, self-contained item.
 Round 1b (follow-up commit): Apple.
 Round 1c (follow-up commit): Facebook + the explicit link-confirmation flow (Decision 4).
-Round 2: FCM (can be built in parallel with Round 1, independent).
-Round 3: Crashlytics + Performance Monitoring (independent, lowest risk).
+Round 2: FCM — DONE (app commit + backend commit). Built in parallel with Round 1.
+Round 3: Crashlytics + Performance Monitoring — DONE (app commit, no backend surface).
 Round 4: App Links (independent of 1-3).
 Round 5: Remote Config + Analytics (build last, benefits from 1/2/4 existing first).
 Round 6: App Check (deliberately last, monitor mode first, enforce mode only after confirming real traffic passes cleanly).

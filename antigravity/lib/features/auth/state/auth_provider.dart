@@ -4,6 +4,8 @@ import 'package:tasko/core/network/api_error.dart';
 import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/core/network/models/auth.dart';
 import 'package:tasko/core/network/models/user.dart';
+import 'package:tasko/shared/services/crashlytics_service.dart';
+import 'package:tasko/shared/services/performance_service.dart';
 import 'package:tasko/shared/services/push_service.dart';
 
 /// Authenticates against the Tasko backend with JWT access/refresh tokens.
@@ -88,6 +90,7 @@ class AuthProvider extends ChangeNotifier {
       _profile = await _services.userApi.me();
       _isLoggedIn = true;
       _errorMessage = null;
+      _syncCrashContext();
       await _syncPushToken();
     } on ApiException {
       _isLoggedIn = false;
@@ -180,6 +183,7 @@ class AuthProvider extends ChangeNotifier {
     _isLoggedIn = false;
     _user = null;
     _profile = null;
+    _syncCrashContext();
     await _revokePushToken();
     await _services.tokenStore.clear();
     notifyListeners();
@@ -228,7 +232,9 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> uploadAvatar(File file) async {
     _errorMessage = null;
     try {
-      await _services.fileApi.uploadAvatar(file);
+      await PerformanceService.trace('avatar_upload', () async {
+        await _services.fileApi.uploadAvatar(file);
+      });
       _profileImagePath = file.path;
       notifyListeners();
       return true;
@@ -322,7 +328,14 @@ class AuthProvider extends ChangeNotifier {
       accessToken: result.tokens.accessToken,
       refreshToken: result.tokens.refreshToken,
     );
+    _syncCrashContext();
     await _syncPushToken();
+  }
+
+  /// Attaches the signed-in user's UUID (never the email) to crash reports, or
+  /// clears it on logout. No-op before Crashlytics is initialized.
+  void _syncCrashContext() {
+    CrashlyticsService.setUser(_isLoggedIn ? userId : '');
   }
 
   /// Registers the FCM device token with the backend once a session exists.

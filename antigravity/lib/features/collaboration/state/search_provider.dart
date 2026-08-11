@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tasko/core/network/api_error.dart';
 import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/core/network/models/search.dart';
+import 'package:tasko/shared/services/performance_service.dart';
 
 /// Search results for a query. Owns loading/error state so screens can stay
 /// presentational (debouncing stays in the widget; network + state live here).
@@ -32,7 +33,9 @@ class SearchProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
     try {
-      _results = await _services.searchApi.search(q: trimmed);
+      await PerformanceService.trace('search_query', () async {
+        _results = await _services.searchApi.search(q: trimmed);
+      });
     } on ApiException catch (e) {
       _errorMessage = e.message;
       _results = null;

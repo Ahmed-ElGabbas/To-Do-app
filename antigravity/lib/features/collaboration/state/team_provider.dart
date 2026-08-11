@@ -4,6 +4,7 @@ import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/core/network/models/invitation.dart';
 import 'package:tasko/core/network/models/member.dart';
 import 'package:tasko/core/network/models/team.dart';
+import 'package:tasko/shared/services/crashlytics_service.dart';
 
 /// Teams the current user belongs to, plus the active-team selection that
 /// scopes team-level features (members, invitations, analytics).
@@ -41,6 +42,7 @@ class TeamProvider extends ChangeNotifier {
         _activeTeam = _teams.first;
       }
       if (_teams.isEmpty) _activeTeam = null;
+      _syncActiveTeam();
     } on ApiException catch (e) {
       _errorMessage = e.message;
     } finally {
@@ -53,6 +55,7 @@ class TeamProvider extends ChangeNotifier {
     final team = _teams.where((t) => t.id == teamId).firstOrNull;
     if (team != null) {
       _activeTeam = team;
+      _syncActiveTeam();
       notifyListeners();
     }
   }
@@ -74,6 +77,7 @@ class TeamProvider extends ChangeNotifier {
         role: 'owner',
       ));
       _activeTeam = _teams.last;
+      _syncActiveTeam();
       notifyListeners();
       return true;
     } on ApiException catch (e) {
@@ -99,6 +103,7 @@ class TeamProvider extends ChangeNotifier {
         _teams[index] = _withTeam(_teams[index], team);
       }
       if (_activeTeam?.id == teamId) _activeTeam = _teams[index];
+      _syncActiveTeam();
       notifyListeners();
       return true;
     } on ApiException catch (e) {
@@ -115,6 +120,7 @@ class TeamProvider extends ChangeNotifier {
       if (_activeTeam?.id == teamId) {
         _activeTeam = _teams.isEmpty ? null : _teams.first;
       }
+      _syncActiveTeam();
       notifyListeners();
       return true;
     } on ApiException catch (e) {
@@ -227,6 +233,12 @@ class TeamProvider extends ChangeNotifier {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /// Attaches the active team id (never its name) to crash reports, or 'none'
+  /// when no team is selected. No-op before Crashlytics is initialized.
+  void _syncActiveTeam() {
+    CrashlyticsService.setActiveTeamId(_activeTeam?.id);
+  }
 
   TeamWithRole _withTeam(TeamWithRole current, Team updated) => TeamWithRole(
         id: updated.id,

@@ -2,8 +2,11 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
+import 'package:tasko/shared/services/crashlytics_service.dart';
+import 'package:tasko/shared/services/performance_service.dart';
 import 'package:tasko/shared/services/push_service.dart';
 
 import 'core/network/test_services.dart';
@@ -88,6 +91,40 @@ class _AuthTestPushMessaging implements PushMessaging {
 
   @override
   Future<RemoteMessage?> get initialMessage async => null;
+}
+
+/// Records Crashlytics context writes so auth hooks are observable in tests.
+class _SpyCrashReporter implements CrashReporter {
+  final setUserIdCalls = <String>[];
+  final setActiveTeamIdCalls = <String?>[];
+  final logs = <String>[];
+
+  @override
+  void setUserId(String userId) => setUserIdCalls.add(userId);
+
+  @override
+  void setActiveTeamId(String? teamId) => setActiveTeamIdCalls.add(teamId);
+
+  @override
+  void log(String message) => logs.add(message);
+
+  @override
+  void recordFlutterError(FlutterErrorDetails details) {}
+
+  @override
+  void recordError(Object error, StackTrace stackTrace,
+      {required bool fatal}) {}
+}
+
+/// Records named performance traces so provider instrumentation is observable.
+class _SpyPerformanceMonitor implements PerformanceMonitor {
+  final traces = <String>[];
+
+  @override
+  Future<void> trace(String name, Future<void> Function() action) async {
+    traces.add(name);
+    await action();
+  }
 }
 
 Map<String, dynamic> deviceJson(String token) => {
@@ -585,6 +622,75 @@ void main() {
       } on FileSystemException {
         // The upload keeps the handle open; the temp file is harmless.
       }
+    });
+
+    test('runs inside the avatar_upload performance trace', () async {
+      final file = File('${Directory.systemTemp.path}/tasko_avatar_trace.png');
+      await file.writeAsBytes([1, 2, 3]);
+      final backend = TestBackend((options, attempt) => ok({
+            'id': 'file-1',
+            'kind': 'avatar',
+            'mimeType': 'image/png',
+            'size': 3,
+            'originalName': 'avatar.png',
+            'url': 'https://cdn.test/avatar.png',
+            'createdAt': '2025-01-01T00:00:00.000Z',
+          }));
+      final monitor = _SpyPerformanceMonitor();
+      PerformanceService.instance = PerformanceService(monitor: monitor);
+      addTearDown(() => PerformanceService.instance = null);
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.uploadAvatar(file);
+
+      expect(result, isTrue);
+      expect(monitor.traces, ['avatar_upload']);
+      try {
+        await file.delete();
+      } on FileSystemException {
+        // The upload keeps the handle open; the temp file is harmless.
+      }
+    });
+  });
+
+  group('crash reporting context', () {
+    test('login attaches the user UUID to crash reports', () async {
+      final reporter = _SpyCrashReporter();
+      CrashlyticsService.instance = CrashlyticsService(reporter: reporter);
+      addTearDown(() => CrashlyticsService.instance = null);
+      final backend =
+          TestBackend((options, attempt) => ok(authResultJson()));
+      final auth = AuthProvider(services: backend.services);
+
+      await auth.login(email: 'test@test.com', password: 'secret');
+
+      expect(reporter.setUserIdCalls, ['user-1']);
+    });
+
+    test('restore attaches the user UUID and logout clears it', () async {
+      final reporter = _SpyCrashReporter();
+      CrashlyticsService.instance = CrashlyticsService(reporter: reporter);
+      addTearDown(() => CrashlyticsService.instance = null);
+      final backend = TestBackend((options, attempt) {
+        switch ('${options.method} ${options.path}') {
+          case 'GET /auth/me':
+            return ok(userJson());
+          case 'GET /users/me':
+            return ok(profileJson());
+          case 'POST /auth/logout':
+            return ok(null);
+          default:
+            throw StateError('unexpected ${options.method} ${options.path}');
+        }
+      });
+      backend.storage.refreshToken = 'refresh-1';
+      final auth = AuthProvider(services: backend.services);
+
+      await auth.loadUser();
+      expect(reporter.setUserIdCalls, ['user-1']);
+
+      await auth.logout();
+      expect(reporter.setUserIdCalls.last, '');
     });
   });
 }

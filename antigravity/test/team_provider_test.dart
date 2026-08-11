@@ -1,8 +1,30 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tasko/features/collaboration/state/team_provider.dart';
+import 'package:tasko/shared/services/crashlytics_service.dart';
 
 import 'core/network/test_services.dart';
+
+class _SpyCrashReporter implements CrashReporter {
+  final setActiveTeamIdCalls = <String?>[];
+
+  @override
+  void setUserId(String userId) {}
+
+  @override
+  void setActiveTeamId(String? teamId) => setActiveTeamIdCalls.add(teamId);
+
+  @override
+  void log(String message) {}
+
+  @override
+  void recordFlutterError(FlutterErrorDetails details) {}
+
+  @override
+  void recordError(Object error, StackTrace stackTrace,
+      {required bool fatal}) {}
+}
 
 Map<String, dynamic> teamJson(String id, String name, {String role = 'owner'}) =>
     {
@@ -44,6 +66,37 @@ void main() {
     provider.selectTeam('b');
 
     expect(provider.activeTeamId, 'b');
+  });
+
+  test('active team id is attached to crash reports', () async {
+    final reporter = _SpyCrashReporter();
+    CrashlyticsService.instance = CrashlyticsService(reporter: reporter);
+    addTearDown(() => CrashlyticsService.instance = null);
+    final backend = TestBackend(
+        (options, attempt) => ok([teamJson('a', 'A'), teamJson('b', 'B')]));
+    final provider = TeamProvider(services: backend.services);
+
+    await provider.loadTeams();
+    provider.selectTeam('b');
+
+    expect(reporter.setActiveTeamIdCalls, ['a', 'b']);
+  });
+
+  test('active team id is cleared when no team is selected', () async {
+    final reporter = _SpyCrashReporter();
+    CrashlyticsService.instance = CrashlyticsService(reporter: reporter);
+    addTearDown(() => CrashlyticsService.instance = null);
+    final backend = TestBackend(
+        (options, attempt) => ok([teamJson('a', 'A'), teamJson('b', 'B')]));
+    final provider = TeamProvider(services: backend.services);
+    await provider.loadTeams();
+    expect(reporter.setActiveTeamIdCalls.last, 'a');
+
+    await provider.deleteTeam('a');
+    expect(reporter.setActiveTeamIdCalls.last, 'b');
+
+    await provider.deleteTeam('b');
+    expect(reporter.setActiveTeamIdCalls.last, null);
   });
 
   test('loadTeams clears the active team when the list is empty', () async {

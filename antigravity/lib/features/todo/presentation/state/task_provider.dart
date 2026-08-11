@@ -4,6 +4,7 @@ import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/features/todo/data/models/task_model.dart';
 import 'package:tasko/features/todo/domain/entities/task.dart';
 import 'package:tasko/shared/services/notification_service.dart';
+import 'package:tasko/shared/services/performance_service.dart';
 
 /// ChangeNotifier for task management backed by the Tasko backend.
 ///
@@ -55,8 +56,10 @@ class TaskProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
     try {
-      final result = await _services.taskApi.list();
-      _tasks = result.items.map((m) => m as Task).toList();
+      await PerformanceService.trace('task_list_load', () async {
+        final result = await _services.taskApi.list();
+        _tasks = result.items.map((m) => m as Task).toList();
+      });
     } on ApiException catch (e) {
       _errorMessage = e.message;
       if (e.isUnauthorized) {

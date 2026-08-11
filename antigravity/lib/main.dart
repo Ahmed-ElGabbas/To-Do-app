@@ -15,7 +15,9 @@ import 'package:tasko/features/collaboration/state/activity_provider.dart';
 import 'package:tasko/features/collaboration/state/admin_provider.dart';
 import 'package:tasko/features/todo/presentation/screens/splash_screen.dart';
 import 'package:tasko/firebase_options.dart';
+import 'package:tasko/shared/services/crashlytics_service.dart';
 import 'package:tasko/shared/services/notification_service.dart';
+import 'package:tasko/shared/services/performance_service.dart';
 import 'package:tasko/shared/services/push_service.dart';
 
 void main() async {
@@ -25,6 +27,12 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Crashlytics: install fatal-error handlers (Round 3).
+  await CrashlyticsService.init();
+
+  // Performance: named traces around task load / search / avatar upload.
+  PerformanceService.instance = PerformanceService();
 
   // Fix black nav bar
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(

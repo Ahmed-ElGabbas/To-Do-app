@@ -2,8 +2,19 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tasko/features/todo/domain/entities/task.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
+import 'package:tasko/shared/services/performance_service.dart';
 
 import 'core/network/test_services.dart';
+
+class _SpyPerformanceMonitor implements PerformanceMonitor {
+  final traces = <String>[];
+
+  @override
+  Future<void> trace(String name, Future<void> Function() action) async {
+    traces.add(name);
+    await action();
+  }
+}
 
 String iso(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -173,6 +184,20 @@ void main() {
 
       expect(provider.tasks, isEmpty);
       expect(provider.errorMessage, isNotNull);
+    });
+
+    test('runs inside the task_list_load performance trace', () async {
+      final fake = FakeTaskBackend()
+        ..serverTasks.add(taskJson(id: 'a', title: 'Alpha'));
+      final monitor = _SpyPerformanceMonitor();
+      PerformanceService.instance = PerformanceService(monitor: monitor);
+      addTearDown(() => PerformanceService.instance = null);
+      final provider = TaskProvider(services: fake.backend.services);
+
+      await provider.loadTasks();
+
+      expect(monitor.traces, ['task_list_load']);
+      expect(provider.tasks.length, 1);
     });
   });
 
