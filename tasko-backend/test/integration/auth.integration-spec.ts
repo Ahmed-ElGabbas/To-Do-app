@@ -376,3 +376,209 @@ describe('auth social login (Firebase stubbed)', () => {
       .expect(400);
   });
 });
+
+describe('auth facebook link confirmation (Decision 4)', () => {
+  let ctx: IntegrationContext;
+  const verifyIdToken = jest.fn();
+
+  const auth = (token: string) => ({
+    Authorization: `Bearer ${token}`,
+  });
+
+  const facebookToken = (overrides: Record<string, unknown> = {}) => ({
+    uid: 'firebase-uid-fb-integration',
+    sub: 'firebase-uid-fb-integration',
+    email: 'facebook-user@example.com',
+    email_verified: true,
+    name: 'Facebook User',
+    given_name: 'Facebook',
+    family_name: 'User',
+    firebase: { sign_in_provider: 'facebook.com' },
+    ...overrides,
+  });
+
+  beforeAll(async () => {
+    ctx = await bootstrapApp({
+      firebaseAdmin: { verifyIdToken, isConfigured: () => false },
+    });
+  });
+
+  afterAll(async () => {
+    await ctx.app.close();
+  });
+
+  beforeEach(() => {
+    verifyIdToken.mockReset();
+    ctx.mailer.clearSentMessages();
+    ctx.throttlerStorage.storage.clear();
+  });
+
+  it('creates a new account from a Facebook token and logs in on the next sign-in', async () => {
+    verifyIdToken.mockResolvedValue(facebookToken());
+
+    const first = await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'facebook', idToken: 'fb-token-1' })
+      .expect(200);
+    expect(first.body.data.user.email).toBe('facebook-user@example.com');
+    expect(first.body.data.user.isEmailVerified).toBe(true);
+    expect(first.body.data.user.authProvider).toBe('facebook');
+
+    const me = await request(ctx.http)
+      .get('/auth/me')
+      .set(auth(first.body.data.tokens.accessToken))
+      .expect(200);
+    expect(me.body.data.email).toBe('facebook-user@example.com');
+
+    await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'facebook', idToken: 'fb-token-1' })
+      .expect(200);
+  });
+
+  it('requires confirmation before silently linking an existing password account', async () => {
+    await signUp(ctx.http, 'fb-existing-pw@example.com');
+
+    verifyIdToken.mockResolvedValue(
+      facebookToken({ email: 'fb-existing-pw@example.com' }),
+    );
+
+    const res = await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'facebook', idToken: 'fb-token-2' })
+      .expect(409);
+    expect(res.body.error.code).toBe('SOCIAL_LINK_CONFIRMATION_REQUIRED');
+    expect(res.body.error.details).toEqual({
+      email: 'fb-existing-pw@example.com',
+      provider: 'facebook',
+      hasPassword: true,
+    });
+
+    // No duplicate account was created; password login still works.
+    await request(ctx.http)
+      .post('/auth/login')
+      .send({ email: 'fb-existing-pw@example.com', password: 'password123' })
+      .expect(200);
+  });
+
+  it('links the identity after a correct password confirmation and logs in next time', async () => {
+    await signUp(ctx.http, 'fb-confirm-pw@example.com');
+
+    verifyIdToken.mockResolvedValue(
+      facebookToken({ email: 'fb-confirm-pw@example.com' }),
+    );
+
+    await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'facebook', idToken: 'fb-token-3' })
+      .expect(409);
+
+    const confirm = await request(ctx.http)
+      .post('/auth/social-link/confirm-password')
+      .send({ idToken: 'fb-token-3', password: 'password123' })
+      .expect(200);
+    expect(confirm.body.data.tokens.accessToken).toBeTruthy();
+    expect(confirm.body.data.user.email).toBe('fb-confirm-pw@example.com');
+
+    const next = await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'facebook', idToken: 'fb-token-3' })
+      .expect(200);
+    expect(next.body.data.user.email).toBe('fb-confirm-pw@example.com');
+  });
+
+  it('rejects a wrong password during confirmation without linking', async () => {
+    await signUp(ctx.http, 'fb-wrong-pw@example.com');
+
+    verifyIdToken.mockResolvedValue(
+      facebookToken({ email: 'fb-wrong-pw@example.com' }),
+    );
+
+    await request(ctx.http)
+      .post('/auth/social-link/confirm-password')
+      .send({ idToken: 'fb-token-4', password: 'wrong-password' })
+      .expect(401);
+
+    await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'facebook', idToken: 'fb-token-4' })
+      .expect(409);
+  });
+
+  it('links a passwordless (Google-created) account via the emailed confirmation link', async () => {
+    verifyIdToken.mockResolvedValue({
+      ...facebookToken({ email: 'fb-passwordless@example.com' }),
+      firebase: { sign_in_provider: 'google.com' },
+    });
+    await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'google', idToken: 'google-token-1' })
+      .expect(200);
+
+    verifyIdToken.mockResolvedValue(
+      facebookToken({ email: 'fb-passwordless@example.com' }),
+    );
+
+    const res = await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'facebook', idToken: 'fb-token-5' })
+      .expect(409);
+    expect(res.body.error.details.hasPassword).toBe(false);
+
+    await request(ctx.http)
+      .post('/auth/social-link/confirm-request')
+      .send({ idToken: 'fb-token-5' })
+      .expect(200);
+
+    const token = lastToken(
+      ctx.mailer,
+      'Confirm linking your Facebook account',
+    );
+    await request(ctx.http)
+      .post('/auth/social-link/confirm-email')
+      .send({ token })
+      .expect(200);
+
+    await request(ctx.http)
+      .post('/auth/social-login')
+      .send({ provider: 'facebook', idToken: 'fb-token-5' })
+      .expect(200);
+  });
+
+  it('requires the password path for accounts that have a password', async () => {
+    await signUp(ctx.http, 'fb-email-req@example.com');
+
+    verifyIdToken.mockResolvedValue(
+      facebookToken({ email: 'fb-email-req@example.com' }),
+    );
+
+    await request(ctx.http)
+      .post('/auth/social-link/confirm-request')
+      .send({ idToken: 'fb-token-6' })
+      .expect(422);
+  });
+
+  it('rejects confirmation endpoints with a non-Facebook token', async () => {
+    verifyIdToken.mockResolvedValue({
+      ...facebookToken(),
+      firebase: { sign_in_provider: 'google.com' },
+    });
+
+    await request(ctx.http)
+      .post('/auth/social-link/confirm-password')
+      .send({ idToken: 'google-token-2', password: 'password123' })
+      .expect(401);
+
+    await request(ctx.http)
+      .post('/auth/social-link/confirm-request')
+      .send({ idToken: 'google-token-2' })
+      .expect(401);
+  });
+
+  it('rejects an unknown or already-used email-confirm token', async () => {
+    await request(ctx.http)
+      .post('/auth/social-link/confirm-email')
+      .send({ token: 'never-issued' })
+      .expect(401);
+  });
+});

@@ -62,6 +62,19 @@ export class UserEntity {
   })
   authProvider: AuthProvider;
 
+  /**
+   * Confirmed Facebook identity (the Firebase `sub` of the ID token that was
+   * verified and then explicitly confirmed against this account). NULL until a
+   * Facebook sign-in is confirmed; see Decision 4 in the integration plan.
+   */
+  @Column({
+    name: 'facebook_account_id',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  facebookAccountId: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

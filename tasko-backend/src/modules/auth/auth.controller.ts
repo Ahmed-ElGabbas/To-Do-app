@@ -21,6 +21,9 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SignupDto } from './dto/signup.dto';
 import { SocialLoginDto } from './dto/social-login.dto';
+import { SocialLinkConfirmEmailDto } from './dto/social-link-confirm-email.dto';
+import { SocialLinkConfirmPasswordDto } from './dto/social-link-confirm-password.dto';
+import { SocialLinkConfirmRequestDto } from './dto/social-link-confirm-request.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 
 @ApiTags('auth')
@@ -52,6 +55,40 @@ export class AuthController {
   @Post('social-login')
   socialLogin(@Body() dto: SocialLoginDto) {
     return this.authService.socialLogin(dto);
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'Confirm a Facebook link to an existing password account by re-entering its password',
+  })
+  @Post('social-link/confirm-password')
+  confirmSocialLinkPassword(@Body() dto: SocialLinkConfirmPasswordDto) {
+    return this.authService.confirmSocialLinkPassword(dto);
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({
+    summary:
+      'Email a one-time link confirming a Facebook link to a passwordless account',
+  })
+  @Post('social-link/confirm-request')
+  requestSocialLinkConfirmation(@Body() dto: SocialLinkConfirmRequestDto) {
+    return this.authService.requestSocialLinkConfirmation(dto);
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Complete a Facebook link with the emailed one-time token',
+  })
+  @Post('social-link/confirm-email')
+  confirmSocialLinkEmail(@Body() dto: SocialLinkConfirmEmailDto) {
+    return this.authService.confirmSocialLinkEmail(dto);
   }
 
   @Public()

@@ -12,6 +12,7 @@ import { allEntities } from '../entities';
 import { BaselineSchema1785801600000 } from './1785801600000-BaselineSchema';
 import { DatabaseFindingsFixes1786147200000 } from './1786147200000-DatabaseFindingsFixes';
 import { AuthProviderColumn1786400000000 } from './1786400000000-AuthProviderColumn';
+import { FacebookSocialLink1786492800000 } from './1786492800000-FacebookSocialLink';
 
 describe('DatabaseFindingsFixes migration', () => {
   let dir: string;
@@ -31,6 +32,7 @@ describe('DatabaseFindingsFixes migration', () => {
         BaselineSchema1785801600000,
         DatabaseFindingsFixes1786147200000,
         AuthProviderColumn1786400000000,
+        FacebookSocialLink1786492800000,
       ],
       migrationsRun: true,
       synchronize: false,
@@ -55,9 +57,10 @@ describe('DatabaseFindingsFixes migration', () => {
 
   it('applies the full migration stack', async () => {
     const rows = await dataSource.query('SELECT * FROM migrations');
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(4);
     expect(rows[1].name).toContain('DatabaseFindingsFixes1786147200000');
     expect(rows[2].name).toContain('AuthProviderColumn1786400000000');
+    expect(rows[3].name).toContain('FacebookSocialLink1786492800000');
   });
 
   it('drops the files.user_id FK while keeping the column and its index', async () => {
@@ -139,14 +142,20 @@ describe('DatabaseFindingsFixes migration', () => {
   });
 
   it('reverts everything in down()', async () => {
-    // The AuthProviderColumn migration was applied last, so it is reverted
-    // first, followed by the DatabaseFindingsFixes revert under test.
+    // FacebookSocialLink was applied last, so it is reverted first, then the
+    // AuthProviderColumn migration, followed by the DatabaseFindingsFixes
+    // revert under test.
     await dataSource.undoLastMigration();
 
     const usersColumns = async (): Promise<string[]> =>
       (await dataSource.query(`PRAGMA table_info('users')`)).map(
         (row: { name: string }) => row.name,
       );
+    expect(await usersColumns()).not.toContain('facebook_account_id');
+    expect(await usersColumns()).toContain('auth_provider');
+
+    await dataSource.undoLastMigration();
+
     expect(await usersColumns()).not.toContain('auth_provider');
 
     await dataSource.undoLastMigration();

@@ -26,6 +26,7 @@ import { allEntities } from '../entities';
 import { BaselineSchema1785801600000 } from './1785801600000-BaselineSchema';
 import { DatabaseFindingsFixes1786147200000 } from './1786147200000-DatabaseFindingsFixes';
 import { AuthProviderColumn1786400000000 } from './1786400000000-AuthProviderColumn';
+import { FacebookSocialLink1786492800000 } from './1786492800000-FacebookSocialLink';
 
 const TABLES = [
   'users',
@@ -41,6 +42,7 @@ const TABLES = [
   'refresh_tokens',
   'password_reset_tokens',
   'email_verification_tokens',
+  'social_link_confirm_tokens',
   'activity_logs',
   'notifications',
   'user_devices',
@@ -64,6 +66,7 @@ describe('Database schema migrations', () => {
         BaselineSchema1785801600000,
         DatabaseFindingsFixes1786147200000,
         AuthProviderColumn1786400000000,
+        FacebookSocialLink1786492800000,
       ],
       migrationsRun: true,
       synchronize: false,
@@ -82,6 +85,7 @@ describe('Database schema migrations', () => {
       'BaselineSchema1785801600000',
       'DatabaseFindingsFixes1786147200000',
       'AuthProviderColumn1786400000000',
+      'FacebookSocialLink1786492800000',
     ]);
   });
 
@@ -90,6 +94,13 @@ describe('Database schema migrations', () => {
     const column = rows.find((row) => row.name === 'auth_provider');
     expect(column).toBeDefined();
     expect(column.dflt_value).toContain('password');
+  });
+
+  it('exposes the nullable facebook_account_id link column', async () => {
+    const rows = await dataSource.query(`PRAGMA table_info('users')`);
+    const column = rows.find((row) => row.name === 'facebook_account_id');
+    expect(column).toBeDefined();
+    expect(column.notnull).toBe(0);
   });
 
   it('creates every table', async () => {

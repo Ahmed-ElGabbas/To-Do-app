@@ -2,6 +2,7 @@ import { ActivityLogEntity } from '../modules/activity-log/entities/activity-log
 import { EmailVerificationTokenEntity } from '../modules/auth/entities/email-verification-token.entity';
 import { PasswordResetTokenEntity } from '../modules/auth/entities/password-reset-token.entity';
 import { RefreshTokenEntity } from '../modules/auth/entities/refresh-token.entity';
+import { SocialLinkConfirmTokenEntity } from '../modules/auth/entities/social-link-confirm-token.entity';
 import { CategoryEntity } from '../modules/category/entities/category.entity';
 import { CommentEntity } from '../modules/comment/entities/comment.entity';
 import { FileEntity } from '../modules/file/entities/file.entity';
@@ -34,6 +35,7 @@ export const allEntities = [
   RefreshTokenEntity,
   PasswordResetTokenEntity,
   EmailVerificationTokenEntity,
+  SocialLinkConfirmTokenEntity,
   ActivityLogEntity,
   NotificationEntity,
   UserDeviceEntity,

@@ -11,7 +11,7 @@ import { DatabaseFindingsFixes1786147200000 } from './1786147200000-DatabaseFind
 import { AuthProviderColumn1786400000000 } from './1786400000000-AuthProviderColumn';
 import { FacebookSocialLink1786492800000 } from './1786492800000-FacebookSocialLink';
 
-describe('AuthProviderColumn migration', () => {
+describe('FacebookSocialLink migration', () => {
   let dir: string;
   let dataSource: DataSource;
 
@@ -20,8 +20,15 @@ describe('AuthProviderColumn migration', () => {
       (row: { name: string }) => row.name,
     );
 
+  const tableNames = async (): Promise<string[]> =>
+    (
+      await dataSource.query(
+        `SELECT name FROM sqlite_master WHERE type = 'table'`,
+      )
+    ).map((row: { name: string }) => row.name);
+
   beforeAll(async () => {
-    dir = mkdtempSync(join(tmpdir(), 'tasko-auth-provider-migrations-'));
+    dir = mkdtempSync(join(tmpdir(), 'tasko-facebook-social-link-migrations-'));
     const dbFile = join(dir, 'migrated.sqlite');
 
     dataSource = new DataSource({
@@ -45,76 +52,69 @@ describe('AuthProviderColumn migration', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('applies the migration on top of the baseline + findings', async () => {
+  it('adds the facebook_account_id column and the confirm-token table', async () => {
     const rows = await dataSource.query('SELECT * FROM migrations');
     expect(rows).toHaveLength(4);
-    expect(rows[2].name).toContain('AuthProviderColumn1786400000000');
-    expect(await userColumns()).toContain('auth_provider');
+    expect(rows[3].name).toContain('FacebookSocialLink1786492800000');
+
+    expect(await userColumns()).toContain('facebook_account_id');
+    expect(await tableNames()).toContain('social_link_confirm_tokens');
   });
 
-  it('defaults existing and new password rows to password', async () => {
+  it('defaults facebook_account_id to NULL for a normal password account', async () => {
     const user = await dataSource.manager.save(
       dataSource.manager.create(UserEntity, {
-        email: 'social-column@example.com',
+        email: 'facebook-column@example.com',
         passwordHash: 'hash',
-        firstName: 'Social',
+        firstName: 'Facebook',
         lastName: 'Column',
         role: Role.USER,
       }),
     );
 
-    expect(user.authProvider).toBe(AuthProvider.PASSWORD);
+    expect(user.facebookAccountId).toBeNull();
 
     const raw = await dataSource.query(
-      `SELECT auth_provider FROM users WHERE id = ?`,
+      `SELECT facebook_account_id FROM users WHERE id = ?`,
       [user.id],
     );
-    expect(raw[0].auth_provider).toBe('password');
+    expect(raw[0].facebook_account_id).toBeNull();
   });
 
-  it('accepts a social provider value for a social-created user', async () => {
+  it('persists a confirmed facebook_account_id', async () => {
     await dataSource.manager.save(
       dataSource.manager.create(UserEntity, {
-        email: 'social-google@example.com',
+        email: 'facebook-linked@example.com',
         passwordHash: 'hash',
-        firstName: 'Google',
-        lastName: 'User',
+        firstName: 'Facebook',
+        lastName: 'Linked',
         role: Role.USER,
-        authProvider: AuthProvider.GOOGLE,
+        authProvider: AuthProvider.PASSWORD,
+        facebookAccountId: 'firebase-sub-123',
       }),
     );
 
     const raw = await dataSource.query(
-      `SELECT auth_provider FROM users WHERE email = ?`,
-      ['social-google@example.com'],
+      `SELECT facebook_account_id FROM users WHERE email = ?`,
+      ['facebook-linked@example.com'],
     );
-    expect(raw[0].auth_provider).toBe('google');
+    expect(raw[0].facebook_account_id).toBe('firebase-sub-123');
   });
 
-  it('drops the column in down()', async () => {
-    // The later FacebookSocialLink migration is reverted first.
-    await dataSource.undoLastMigration();
-    expect(await userColumns()).not.toContain('facebook_account_id');
-
+  it('drops both additions in down() and re-applies cleanly with up()', async () => {
     await dataSource.undoLastMigration();
 
     const columns = await userColumns();
-    expect(columns).not.toContain('auth_provider');
+    expect(columns).not.toContain('facebook_account_id');
+    expect(await tableNames()).not.toContain('social_link_confirm_tokens');
+    expect(columns).toContain('auth_provider');
 
-    // The baseline columns are untouched by the revert.
-    expect(columns).toContain('password_hash');
-    expect(columns).toContain('first_name');
-  });
-
-  it('re-applies cleanly with up() after a full revert', async () => {
-    const migration = new AuthProviderColumn1786400000000();
+    const migration = new FacebookSocialLink1786492800000();
     const queryRunner = dataSource.createQueryRunner();
     await migration.up(queryRunner);
     await queryRunner.release();
 
-    expect(await userColumns()).toContain('auth_provider');
-    const rows = await dataSource.query(`SELECT * FROM migrations`);
-    // Manually running up() does not write a row; the two earlier migrations remain.
-    expect(rows).toHaveLength(2);
+    expect(await userColumns()).toContain('facebook_account_id');
+    expect(await tableNames()).toContain('social_link_confirm_tokens');
   });
 });

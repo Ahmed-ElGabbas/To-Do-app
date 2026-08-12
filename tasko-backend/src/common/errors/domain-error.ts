@@ -46,3 +46,20 @@ export class ValidationError extends DomainError {
     super('BUSINESS_VALIDATION_ERROR', 422, message, details);
   }
 }
+
+/**
+ * A social sign-in (Facebook) matched an existing account by verified email
+ * but the identity has not been confirmed against that account yet. The
+ * caller must prove ownership (password or emailed link) before linking.
+ * `details` carries `{ provider, email, hasPassword }` for the client UI.
+ */
+export class SocialLinkConfirmationRequiredError extends DomainError {
+  constructor(email: string, hasPassword: boolean) {
+    super(
+      'SOCIAL_LINK_CONFIRMATION_REQUIRED',
+      409,
+      'An account with this email already exists. Confirm your ownership to link your Facebook account.',
+      { email, provider: 'facebook', hasPassword },
+    );
+  }
+}

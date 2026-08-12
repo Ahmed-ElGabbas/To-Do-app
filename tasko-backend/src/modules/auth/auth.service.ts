@@ -9,6 +9,8 @@ import { Repository } from 'typeorm';
 import {
   ConflictError,
   UnauthorizedError,
+  ValidationError,
+  SocialLinkConfirmationRequiredError,
 } from '../../common/errors/domain-error';
 import { Role } from '../../common/constants/role.enum';
 import { AuthProvider } from '../../common/constants/auth-provider.enum';
@@ -19,9 +21,13 @@ import { UserEntity } from '../user/entities/user.entity';
 import { EmailVerificationTokenEntity } from './entities/email-verification-token.entity';
 import { PasswordResetTokenEntity } from './entities/password-reset-token.entity';
 import { RefreshTokenEntity } from './entities/refresh-token.entity';
+import { SocialLinkConfirmTokenEntity } from './entities/social-link-confirm-token.entity';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SignupDto } from './dto/signup.dto';
+import { SocialLinkConfirmEmailDto } from './dto/social-link-confirm-email.dto';
+import { SocialLinkConfirmPasswordDto } from './dto/social-link-confirm-password.dto';
+import { SocialLinkConfirmRequestDto } from './dto/social-link-confirm-request.dto';
 import { SocialLoginDto, SocialProvider } from './dto/social-login.dto';
 
 export interface AuthTokens {
@@ -36,11 +42,13 @@ export interface PublicUser {
   lastName: string;
   role: Role;
   isEmailVerified: boolean;
+  authProvider: AuthProvider;
   createdAt: Date;
 }
 
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+const SOCIAL_LINK_CONFIRM_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 /** Maps a requested social provider to its Firebase `sign_in_provider` value. */
 const SIGN_IN_PROVIDER: Record<SocialProvider, string> = {
@@ -70,6 +78,8 @@ export class AuthService {
     private readonly verificationRepo: Repository<EmailVerificationTokenEntity>,
     @InjectRepository(PasswordResetTokenEntity)
     private readonly resetRepo: Repository<PasswordResetTokenEntity>,
+    @InjectRepository(SocialLinkConfirmTokenEntity)
+    private readonly socialLinkRepo: Repository<SocialLinkConfirmTokenEntity>,
   ) {}
 
   /**
@@ -79,6 +89,14 @@ export class AuthService {
    * found-or-created and the same token pair as a password login is issued.
    * New accounts get `authProvider` set and email marked verified; existing
    * accounts simply log in (their provider column is never overwritten).
+   *
+   * Facebook is the exception (Decision 4): a Facebook sign-in whose verified
+   * email matches an existing account is NOT logged in silently. If the
+   * account has already confirmed that Facebook identity
+   * (`facebook_account_id` matches the token's subject) it logs in normally;
+   * otherwise it throws `SocialLinkConfirmationRequiredError` and the client
+   * must prove ownership (password or emailed link) before linking. A
+   * duplicate account is never created for an existing email.
    */
   async socialLogin(
     dto: SocialLoginDto,
@@ -110,14 +128,123 @@ export class AuthService {
           '',
         role: Role.USER,
         authProvider: AUTH_PROVIDER_BY_SOCIAL[dto.provider],
+        ...(dto.provider === SocialProvider.FACEBOOK
+          ? { facebookAccountId: this.providerAccountIdOf(decoded) }
+          : {}),
       });
       await this.userService.markEmailVerified(user.id);
       user = (await this.userService.findById(user.id))!;
+    } else if (
+      dto.provider === SocialProvider.FACEBOOK &&
+      user.facebookAccountId !== this.providerAccountIdOf(decoded)
+    ) {
+      throw new SocialLinkConfirmationRequiredError(
+        email,
+        user.authProvider === AuthProvider.PASSWORD,
+      );
     }
 
     await this.userService.touchLastLogin(user.id);
     const tokens = await this.issueTokens(user.id);
     return { user: this.toPublic(user), tokens };
+  }
+
+  /**
+   * Confirms a Facebook link to an existing password account by re-entering
+   * its password, then links the identity and issues tokens. The account is
+   * identified by the verified email in the Facebook ID token, never by
+   * client-supplied fields.
+   */
+  async confirmSocialLinkPassword(
+    dto: SocialLinkConfirmPasswordDto,
+  ): Promise<{ user: PublicUser; tokens: AuthTokens }> {
+    const decoded = await this.verifyFacebookToken(dto.idToken);
+    const user = await this.userService.findByEmailWithHash(decoded.email!);
+    if (!user || !(await argon2.verify(user.passwordHash, dto.password))) {
+      throw new UnauthorizedError('Invalid email or password');
+    }
+
+    await this.userService.linkFacebookAccount(
+      user.id,
+      this.providerAccountIdOf(decoded),
+    );
+    await this.userService.touchLastLogin(user.id);
+    const tokens = await this.issueTokens(user.id);
+    return { user: this.toPublic(user), tokens };
+  }
+
+  /**
+   * Emails a one-time confirmation link to a passwordless account whose email
+   * a Facebook sign-in matched (Google/Apple-created accounts have no usable
+   * password, so password proof is impossible). Password accounts must use
+   * [confirmSocialLinkPassword] instead. The emailed link binds the Facebook
+   * identity that was verified in this request.
+   */
+  async requestSocialLinkConfirmation(
+    dto: SocialLinkConfirmRequestDto,
+  ): Promise<{ message: string }> {
+    const decoded = await this.verifyFacebookToken(dto.idToken);
+    const user = await this.userService.findByEmail(decoded.email!);
+    if (!user) {
+      throw new ConflictError('No account with this email exists');
+    }
+    if (user.authProvider === AuthProvider.PASSWORD) {
+      throw new ValidationError(
+        'This account uses a password. Confirm by entering it instead.',
+      );
+    }
+
+    const rawToken = randomBytes(32).toString('base64url');
+    await this.socialLinkRepo.insert({
+      userId: user.id,
+      tokenHash: this.hashToken(rawToken),
+      provider: 'facebook',
+      providerAccountId: this.providerAccountIdOf(decoded),
+      expiresAt: new Date(Date.now() + SOCIAL_LINK_CONFIRM_TOKEN_TTL_MS),
+    });
+    await this.mailer.sendMail({
+      to: user.email,
+      subject: 'Confirm linking your Facebook account',
+      html: this.socialLinkConfirmHtml(rawToken),
+    });
+
+    return {
+      message:
+        'A confirmation link has been sent to your email. Click it, then sign in with Facebook again.',
+    };
+  }
+
+  /**
+   * Completes a Facebook link from the emailed one-time token. Persists the
+   * identity recorded when the token was issued, then consumes it. Tokens are
+   * not issued here — the user returns to the app and signs in with Facebook,
+   * which then succeeds because the link is recorded.
+   */
+  async confirmSocialLinkEmail(
+    dto: SocialLinkConfirmEmailDto,
+  ): Promise<{ message: string }> {
+    const record = await this.socialLinkRepo.findOne({
+      where: { tokenHash: this.hashToken(dto.token) },
+    });
+    if (!record) {
+      throw new UnauthorizedError('Invalid confirmation token');
+    }
+    if (record.consumedAt) {
+      throw new UnauthorizedError('Confirmation token has already been used');
+    }
+    if (record.expiresAt.getTime() < Date.now()) {
+      throw new UnauthorizedError('Confirmation token has expired');
+    }
+
+    await this.userService.linkFacebookAccount(
+      record.userId,
+      record.providerAccountId,
+    );
+    await this.socialLinkRepo.update(record.id, { consumedAt: new Date() });
+
+    return {
+      message: 'Facebook account linked. You can now sign in with Facebook.',
+    };
   }
 
   async signup(
@@ -397,6 +524,39 @@ export class AuthService {
     return createHash('sha256').update(raw).digest('hex');
   }
 
+  /**
+   * Verifies a token was issued for a Facebook sign-in with a verified email
+   * and returns its claims. Reused by the confirmation endpoints so the link
+   * always binds the identity that the user actually signed in with.
+   */
+  private async verifyFacebookToken(
+    idToken: string,
+  ): Promise<Awaited<ReturnType<FirebaseAdminService['verifyIdToken']>>> {
+    const decoded = await this.firebaseAdmin.verifyIdToken(idToken);
+    if (decoded.firebase?.sign_in_provider !== 'facebook.com') {
+      throw new UnauthorizedError(
+        'The token was not issued for Facebook sign-in',
+      );
+    }
+    if (!decoded.email || !decoded.email_verified) {
+      throw new UnauthorizedError(
+        'The Facebook account has no verified email address',
+      );
+    }
+    return decoded;
+  }
+
+  /** Stable per-user identity inside the Firebase project (the UID). */
+  private providerAccountIdOf(
+    decoded: Awaited<ReturnType<FirebaseAdminService['verifyIdToken']>>,
+  ): string {
+    const id = decoded.sub ?? decoded.uid;
+    if (!id) {
+      throw new UnauthorizedError('The sign-in token carries no user identity');
+    }
+    return id;
+  }
+
   private getJwtSecret(): string {
     return this.config.get<string>('jwt.secret', '');
   }
@@ -409,6 +569,7 @@ export class AuthService {
       lastName: user.lastName,
       role: user.role,
       isEmailVerified: user.isEmailVerified,
+      authProvider: user.authProvider,
       createdAt: user.createdAt,
     };
   }
@@ -421,5 +582,10 @@ export class AuthService {
   private resetPasswordHtml(rawToken: string): string {
     const link = `${this.config.get<string>('app.baseUrl')}/reset-password?token=${encodeURIComponent(rawToken)}`;
     return `<p>Reset your Tasko password by following this link (valid for 1 hour):</p><a href="${link}">Reset password</a>`;
+  }
+
+  private socialLinkConfirmHtml(rawToken: string): string {
+    const link = `${this.config.get<string>('app.baseUrl')}/confirm-social-link?token=${encodeURIComponent(rawToken)}`;
+    return `<p>Someone tried to sign in to a Tasko account with a Facebook account matching your email. If this was you, confirm the link by following this link (valid for 1 hour):</p><a href="${link}">Confirm Facebook link</a><p>If you did not request this, you can safely ignore this email.</p>`;
   }
 }

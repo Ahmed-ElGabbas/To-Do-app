@@ -3,7 +3,10 @@ import { JwtService } from '@nestjs/jwt';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
-import { UnauthorizedError } from '../../common/errors/domain-error';
+import {
+  SocialLinkConfirmationRequiredError,
+  UnauthorizedError,
+} from '../../common/errors/domain-error';
 import { AuthProvider } from '../../common/constants/auth-provider.enum';
 import { Role } from '../../common/constants/role.enum';
 import { FirebaseAdminService } from '../../infrastructure/firebase/firebase-admin.service';
@@ -14,6 +17,7 @@ import { SocialProvider } from './dto/social-login.dto';
 import { EmailVerificationTokenEntity } from './entities/email-verification-token.entity';
 import { PasswordResetTokenEntity } from './entities/password-reset-token.entity';
 import { RefreshTokenEntity } from './entities/refresh-token.entity';
+import { SocialLinkConfirmTokenEntity } from './entities/social-link-confirm-token.entity';
 
 const TEST_SECRET = 'unit-test-secret-that-is-at-least-32-chars-long';
 
@@ -28,6 +32,7 @@ describe('AuthService', () => {
     updatePassword: jest.fn(),
     updateEmail: jest.fn(),
     markEmailVerified: jest.fn(),
+    linkFacebookAccount: jest.fn(),
   };
   const mailer = { sendMail: jest.fn() };
   const firebaseAdmin = { verifyIdToken: jest.fn() };
@@ -42,6 +47,11 @@ describe('AuthService', () => {
     update: jest.fn(),
   };
   const resetRepo = {
+    findOne: jest.fn(),
+    insert: jest.fn(),
+    update: jest.fn(),
+  };
+  const socialLinkRepo = {
     findOne: jest.fn(),
     insert: jest.fn(),
     update: jest.fn(),
@@ -65,6 +75,8 @@ describe('AuthService', () => {
     lastName: 'Example',
     role: Role.USER,
     isEmailVerified: false,
+    authProvider: AuthProvider.PASSWORD,
+    facebookAccountId: null,
     createdAt: new Date(),
   };
 
@@ -91,6 +103,10 @@ describe('AuthService', () => {
         {
           provide: getRepositoryToken(PasswordResetTokenEntity),
           useValue: resetRepo,
+        },
+        {
+          provide: getRepositoryToken(SocialLinkConfirmTokenEntity),
+          useValue: socialLinkRepo,
         },
       ],
     }).compile();
@@ -427,6 +443,310 @@ describe('AuthService', () => {
           idToken: 'any',
         }),
       ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    });
+  });
+
+  describe('socialLogin facebook confirmation (Decision 4)', () => {
+    const facebookToken = {
+      uid: 'firebase-uid-fb',
+      sub: 'firebase-uid-fb',
+      email: 'carol@gmail.com',
+      email_verified: true,
+      name: 'Carol Facebook',
+      given_name: 'Carol',
+      family_name: 'Facebook',
+      firebase: { sign_in_provider: 'facebook.com' },
+    };
+
+    it('creates a new account and links the Facebook identity immediately', async () => {
+      firebaseAdmin.verifyIdToken.mockResolvedValue(facebookToken);
+      userService.findByEmail.mockResolvedValue(null);
+      userService.create.mockResolvedValue({
+        ...user,
+        email: facebookToken.email,
+        facebookAccountId: 'firebase-uid-fb',
+      });
+      userService.findById.mockResolvedValue({
+        ...user,
+        email: facebookToken.email,
+        isEmailVerified: true,
+        authProvider: AuthProvider.FACEBOOK,
+        facebookAccountId: 'firebase-uid-fb',
+      });
+
+      const result = await service.socialLogin({
+        provider: SocialProvider.FACEBOOK,
+        idToken: 'token-fb-1',
+      });
+
+      const input = userService.create.mock.calls[0][0];
+      expect(input.authProvider).toBe(AuthProvider.FACEBOOK);
+      expect(input.facebookAccountId).toBe('firebase-uid-fb');
+      expect(userService.markEmailVerified).toHaveBeenCalledWith(user.id);
+      expect(result.tokens.accessToken).toBeTruthy();
+      expect(result.user.authProvider).toBe(AuthProvider.FACEBOOK);
+    });
+
+    it('logs in when the Facebook identity was already confirmed', async () => {
+      firebaseAdmin.verifyIdToken.mockResolvedValue(facebookToken);
+      userService.findByEmail.mockResolvedValue({
+        ...user,
+        email: facebookToken.email,
+        facebookAccountId: 'firebase-uid-fb',
+      });
+
+      const result = await service.socialLogin({
+        provider: SocialProvider.FACEBOOK,
+        idToken: 'token-fb-2',
+      });
+
+      expect(userService.create).not.toHaveBeenCalled();
+      expect(userService.touchLastLogin).toHaveBeenCalledWith(user.id);
+      expect(result.tokens.accessToken).toBeTruthy();
+    });
+
+    it('requires confirmation instead of silently linking an existing password account', async () => {
+      firebaseAdmin.verifyIdToken.mockResolvedValue(facebookToken);
+      userService.findByEmail.mockResolvedValue({
+        ...user,
+        email: facebookToken.email,
+        authProvider: AuthProvider.PASSWORD,
+        facebookAccountId: null,
+      });
+
+      await expect(
+        service.socialLogin({
+          provider: SocialProvider.FACEBOOK,
+          idToken: 'token-fb-3',
+        }),
+      ).rejects.toBeInstanceOf(SocialLinkConfirmationRequiredError);
+
+      try {
+        await service.socialLogin({
+          provider: SocialProvider.FACEBOOK,
+          idToken: 'token-fb-3',
+        });
+      } catch (e) {
+        expect((e as SocialLinkConfirmationRequiredError).details).toEqual({
+          email: facebookToken.email,
+          provider: 'facebook',
+          hasPassword: true,
+        });
+      }
+      expect(userService.create).not.toHaveBeenCalled();
+    });
+
+    it('requires confirmation for a passwordless account and reports hasPassword false', async () => {
+      firebaseAdmin.verifyIdToken.mockResolvedValue(facebookToken);
+      userService.findByEmail.mockResolvedValue({
+        ...user,
+        email: facebookToken.email,
+        authProvider: AuthProvider.GOOGLE,
+        facebookAccountId: null,
+      });
+
+      await expect(
+        service.socialLogin({
+          provider: SocialProvider.FACEBOOK,
+          idToken: 'token-fb-4',
+        }),
+      ).rejects.toMatchObject({
+        code: 'SOCIAL_LINK_CONFIRMATION_REQUIRED',
+        details: { hasPassword: false },
+      });
+    });
+
+    it('requires confirmation when a different Facebook identity is linked', async () => {
+      firebaseAdmin.verifyIdToken.mockResolvedValue(facebookToken);
+      userService.findByEmail.mockResolvedValue({
+        ...user,
+        email: facebookToken.email,
+        facebookAccountId: 'some-other-sub',
+      });
+
+      await expect(
+        service.socialLogin({
+          provider: SocialProvider.FACEBOOK,
+          idToken: 'token-fb-5',
+        }),
+      ).rejects.toBeInstanceOf(SocialLinkConfirmationRequiredError);
+    });
+  });
+
+  describe('social link confirmation', () => {
+    const facebookToken = {
+      uid: 'firebase-uid-fb',
+      sub: 'firebase-uid-fb',
+      email: 'alice@example.com',
+      email_verified: true,
+      name: 'Alice Facebook',
+      firebase: { sign_in_provider: 'facebook.com' },
+    };
+
+    describe('confirmSocialLinkPassword', () => {
+      it('links the Facebook identity and issues tokens when the password matches', async () => {
+        firebaseAdmin.verifyIdToken.mockResolvedValue(facebookToken);
+        userService.findByEmailWithHash.mockResolvedValue({
+          ...user,
+          passwordHash: await argon2.hash('password123'),
+        });
+
+        const result = await service.confirmSocialLinkPassword({
+          idToken: 'token-fb',
+          password: 'password123',
+        });
+
+        expect(userService.linkFacebookAccount).toHaveBeenCalledWith(
+          user.id,
+          'firebase-uid-fb',
+        );
+        expect(userService.touchLastLogin).toHaveBeenCalledWith(user.id);
+        expect(result.tokens.accessToken).toBeTruthy();
+        expect(result.tokens.refreshToken).toBeTruthy();
+      });
+
+      it('rejects a wrong password without linking', async () => {
+        firebaseAdmin.verifyIdToken.mockResolvedValue(facebookToken);
+        userService.findByEmailWithHash.mockResolvedValue({
+          ...user,
+          passwordHash: await argon2.hash('password123'),
+        });
+
+        await expect(
+          service.confirmSocialLinkPassword({
+            idToken: 'token-fb',
+            password: 'wrong-password',
+          }),
+        ).rejects.toBeInstanceOf(UnauthorizedError);
+        expect(userService.linkFacebookAccount).not.toHaveBeenCalled();
+      });
+
+      it('rejects a token that is not a Facebook sign-in', async () => {
+        firebaseAdmin.verifyIdToken.mockResolvedValue({
+          ...facebookToken,
+          firebase: { sign_in_provider: 'google.com' },
+        });
+
+        await expect(
+          service.confirmSocialLinkPassword({
+            idToken: 'token-google',
+            password: 'password123',
+          }),
+        ).rejects.toBeInstanceOf(UnauthorizedError);
+        expect(userService.findByEmailWithHash).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('requestSocialLinkConfirmation', () => {
+      it('emails a confirmation link to a passwordless account', async () => {
+        firebaseAdmin.verifyIdToken.mockResolvedValue(facebookToken);
+        userService.findByEmail.mockResolvedValue({
+          ...user,
+          authProvider: AuthProvider.GOOGLE,
+        });
+
+        await service.requestSocialLinkConfirmation({ idToken: 'token-fb' });
+
+        expect(socialLinkRepo.insert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: user.id,
+            provider: 'facebook',
+            providerAccountId: 'firebase-uid-fb',
+            tokenHash: expect.any(String),
+            expiresAt: expect.any(Date),
+          }),
+        );
+        expect(mailer.sendMail).toHaveBeenCalledWith(
+          expect.objectContaining({ to: user.email }),
+        );
+      });
+
+      it('requires the password path for accounts that have a password', async () => {
+        firebaseAdmin.verifyIdToken.mockResolvedValue(facebookToken);
+        userService.findByEmail.mockResolvedValue({
+          ...user,
+          authProvider: AuthProvider.PASSWORD,
+        });
+
+        await expect(
+          service.requestSocialLinkConfirmation({ idToken: 'token-fb' }),
+        ).rejects.toMatchObject({ code: 'BUSINESS_VALIDATION_ERROR' });
+        expect(socialLinkRepo.insert).not.toHaveBeenCalled();
+        expect(mailer.sendMail).not.toHaveBeenCalled();
+      });
+
+      it('rejects when no account matches the verified email', async () => {
+        firebaseAdmin.verifyIdToken.mockResolvedValue(facebookToken);
+        userService.findByEmail.mockResolvedValue(null);
+
+        await expect(
+          service.requestSocialLinkConfirmation({ idToken: 'token-fb' }),
+        ).rejects.toMatchObject({ code: 'CONFLICT' });
+        expect(socialLinkRepo.insert).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('confirmSocialLinkEmail', () => {
+      it('links the pending identity and consumes the token', async () => {
+        socialLinkRepo.findOne.mockResolvedValue({
+          id: 'confirm-1',
+          userId: user.id,
+          providerAccountId: 'firebase-uid-fb',
+          expiresAt: new Date(Date.now() + 3_600_000),
+          consumedAt: null,
+        });
+
+        const result = await service.confirmSocialLinkEmail({
+          token: 'raw-token',
+        });
+
+        expect(userService.linkFacebookAccount).toHaveBeenCalledWith(
+          user.id,
+          'firebase-uid-fb',
+        );
+        expect(socialLinkRepo.update).toHaveBeenCalledWith('confirm-1', {
+          consumedAt: expect.any(Date),
+        });
+        expect(result.message).toContain('linked');
+      });
+
+      it('rejects an unknown token', async () => {
+        socialLinkRepo.findOne.mockResolvedValue(null);
+        await expect(
+          service.confirmSocialLinkEmail({ token: 'raw-token' }),
+        ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+        expect(userService.linkFacebookAccount).not.toHaveBeenCalled();
+      });
+
+      it('rejects an already-consumed token', async () => {
+        socialLinkRepo.findOne.mockResolvedValue({
+          id: 'confirm-1',
+          userId: user.id,
+          providerAccountId: 'firebase-uid-fb',
+          expiresAt: new Date(Date.now() + 3_600_000),
+          consumedAt: new Date(),
+        });
+
+        await expect(
+          service.confirmSocialLinkEmail({ token: 'raw-token' }),
+        ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+        expect(userService.linkFacebookAccount).not.toHaveBeenCalled();
+      });
+
+      it('rejects an expired token', async () => {
+        socialLinkRepo.findOne.mockResolvedValue({
+          id: 'confirm-1',
+          userId: user.id,
+          providerAccountId: 'firebase-uid-fb',
+          expiresAt: new Date(Date.now() - 1),
+          consumedAt: null,
+        });
+
+        await expect(
+          service.confirmSocialLinkEmail({ token: 'raw-token' }),
+        ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+        expect(userService.linkFacebookAccount).not.toHaveBeenCalled();
+      });
     });
   });
 

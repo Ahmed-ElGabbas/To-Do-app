@@ -10,6 +10,7 @@ import { AuthService } from './auth.service';
 import { EmailVerificationTokenEntity } from './entities/email-verification-token.entity';
 import { PasswordResetTokenEntity } from './entities/password-reset-token.entity';
 import { RefreshTokenEntity } from './entities/refresh-token.entity';
+import { SocialLinkConfirmTokenEntity } from './entities/social-link-confirm-token.entity';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
@@ -23,6 +24,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       RefreshTokenEntity,
       EmailVerificationTokenEntity,
       PasswordResetTokenEntity,
+      SocialLinkConfirmTokenEntity,
     ]),
   ],
   controllers: [AuthController],

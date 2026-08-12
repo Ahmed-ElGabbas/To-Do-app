@@ -74,6 +74,11 @@ export class UserService {
      * default; social signups pass the verified provider explicitly.
      */
     authProvider?: AuthProvider;
+    /**
+     * Confirmed Facebook identity (Firebase `sub`) for Facebook-created
+     * accounts. Set at creation so the first sign-in is already linked.
+     */
+    facebookAccountId?: string | null;
   }): Promise<UserEntity> {
     const user = this.userRepository.create(input);
     return this.userRepository.save(user);
@@ -100,6 +105,14 @@ export class UserService {
 
   async touchLastLogin(id: string): Promise<void> {
     await this.userRepository.update(id, { lastLoginAt: new Date() });
+  }
+
+  /** Persists a confirmed Facebook identity against the account. */
+  async linkFacebookAccount(
+    id: string,
+    facebookAccountId: string,
+  ): Promise<void> {
+    await this.userRepository.update(id, { facebookAccountId });
   }
 
   /** Attaches or clears the avatar file reference. `fileId` must exist. */
