@@ -25,6 +25,7 @@ class AuthProvider extends ChangeNotifier {
   bool _isRestoring = false;
   String? _errorMessage;
   Future<void>? _restorationFuture;
+  SocialLinkConfirmation? _pendingSocialLink;
 
   // Local-only profile extras retained for display (the backend does not
   // persist phone/country/bio or local avatar paths).
@@ -40,6 +41,11 @@ class AuthProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   AuthUser? get user => _user;
   UserProfile? get profile => _profile;
+
+  /// Set when a social sign-in hit an existing account created by a different
+  /// method (Decision 4) and ownership confirmation is required before linking.
+  SocialLinkConfirmation? get pendingSocialLinkConfirmation =>
+      _pendingSocialLink;
 
   String get userId => _user?.id ?? _profile?.id ?? '';
   String get email => _user?.email ?? _profile?.email ?? '';
@@ -156,11 +162,18 @@ class AuthProvider extends ChangeNotifier {
   /// Signs in with a Firebase ID token from a social provider (`google`,
   /// `apple`, `facebook`). The backend verifies the token and links/creates the
   /// account by verified email.
+  ///
+  /// When the email already belongs to an account created by a different
+  /// method, the backend refuses to auto-link (Decision 4): [socialLogin]
+  /// returns `false`, no session is started, and
+  /// [pendingSocialLinkConfirmation] describes the confirmation the user must
+  /// complete first (password or emailed link).
   Future<bool> socialLogin({
     required String idToken,
     required String provider,
   }) async {
     _errorMessage = null;
+    _pendingSocialLink = null;
     try {
       final result = await _services.authApi.socialLogin(
         idToken: idToken,
@@ -169,6 +182,67 @@ class AuthProvider extends ChangeNotifier {
       await _applyAuthResult(result);
       _isLoggedIn = true;
       notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      if (e.code == 'SOCIAL_LINK_CONFIRMATION_REQUIRED') {
+        final details = e.details as Map<String, dynamic>?;
+        _pendingSocialLink = SocialLinkConfirmation(
+          email: details?['email'] as String? ?? '',
+          hasPassword: details?['hasPassword'] as bool? ?? false,
+          idToken: idToken,
+        );
+        return false;
+      }
+      _errorMessage = e.message;
+      return false;
+    }
+  }
+
+  /// Completes the Decision 4 password path: proves ownership of the existing
+  /// password account and links the pending Facebook identity, logging in.
+  Future<bool> confirmSocialLinkPassword({required String password}) async {
+    _errorMessage = null;
+    final pending = _pendingSocialLink;
+    if (pending == null) return false;
+    try {
+      final result = await _services.authApi.confirmSocialLinkPassword(
+        idToken: pending.idToken,
+        password: password,
+      );
+      _pendingSocialLink = null;
+      await _applyAuthResult(result);
+      _isLoggedIn = true;
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
+      return false;
+    }
+  }
+
+  /// Emails a one-time confirmation link to the owner of the existing
+  /// passwordless account (Decision 4 email path).
+  Future<bool> requestSocialLinkEmailConfirmation() async {
+    _errorMessage = null;
+    final pending = _pendingSocialLink;
+    if (pending == null) return false;
+    try {
+      await _services.authApi.requestSocialLinkConfirmation(
+        idToken: pending.idToken,
+      );
+      return true;
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
+      return false;
+    }
+  }
+
+  /// Confirms ownership with the emailed one-time link. The account is linked
+  /// server-side; the user then signs in again with "Continue with Facebook".
+  Future<bool> confirmSocialLinkEmail({required String token}) async {
+    _errorMessage = null;
+    try {
+      await _services.authApi.confirmSocialLinkEmail(token: token);
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;
@@ -183,6 +257,7 @@ class AuthProvider extends ChangeNotifier {
     _isLoggedIn = false;
     _user = null;
     _profile = null;
+    _pendingSocialLink = null;
     _syncCrashContext();
     await _revokePushToken();
     await _services.tokenStore.clear();

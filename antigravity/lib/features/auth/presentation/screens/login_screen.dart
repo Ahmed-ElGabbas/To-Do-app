@@ -8,7 +8,10 @@ import 'package:tasko/features/auth/state/auth_provider.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
 import 'package:tasko/features/auth/presentation/screens/signup_screen.dart';
 import 'package:tasko/features/auth/presentation/widgets/google_sign_in_button.dart';
+import 'package:tasko/features/auth/presentation/widgets/facebook_sign_in_button.dart';
+import 'package:tasko/features/auth/presentation/widgets/social_link_confirmation_dialog.dart';
 import 'package:tasko/features/auth/services/google_sign_in_service.dart';
+import 'package:tasko/features/auth/services/facebook_sign_in_service.dart';
 import 'package:tasko/features/todo/presentation/widgets/main_scaffold.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -26,6 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String? _errorMessage;
   final _googleSignIn = GoogleSignInService();
+  final _facebookSignIn = FacebookSignInService();
 
   @override
   void dispose() {
@@ -113,6 +117,58 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() {
         _isLoading = false;
         _errorMessage = l10n.get('google_sign_in_failed');
+      });
+    }
+  }
+
+  Future<void> _signInWithFacebook() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    final auth = context.read<AuthProvider>();
+    final l10n = AppLocalizations.of(context);
+    try {
+      final idToken = await _facebookSignIn.getFirebaseIdToken();
+      if (!mounted) return;
+      final success = await auth.socialLogin(
+        idToken: idToken,
+        provider: 'facebook',
+      );
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      if (success) {
+        await context.read<TaskProvider>().loadTasks();
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainScaffold()),
+          (route) => false,
+        );
+        return;
+      }
+      if (auth.pendingSocialLinkConfirmation != null) {
+        final linked = await showSocialLinkConfirmation(context);
+        if (linked == true && mounted) {
+          await context.read<TaskProvider>().loadTasks();
+          if (!mounted) return;
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const MainScaffold()),
+            (route) => false,
+          );
+        }
+        return;
+      }
+      setState(
+        () => _errorMessage = auth.errorMessage ?? l10n.get('facebook_sign_in_failed'),
+      );
+    } on FacebookSignInCancelledException {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    } on Exception {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = l10n.get('facebook_sign_in_failed');
       });
     }
   }
@@ -267,6 +323,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: AppSizes.xl),
                 GoogleSignInButton(
                   onPressed: _signInWithGoogle,
+                  isLoading: _isLoading,
+                ),
+                const SizedBox(height: AppSizes.md),
+                FacebookSignInButton(
+                  onPressed: _signInWithFacebook,
                   isLoading: _isLoading,
                 ),
                 const SizedBox(height: AppSizes.xl),

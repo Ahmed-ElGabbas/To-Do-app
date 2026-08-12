@@ -29,8 +29,41 @@ void main() {
       });
       expect(result.user.displayName, 'A B');
       expect(result.user.role, 'USER');
+      expect(result.user.authProvider, 'password');
       expect(result.tokens.accessToken, 'jwt');
       expect(result.user.createdAt.year, 2026);
+    });
+
+    test('AuthUser parses the authProvider field', () {
+      const payload = {
+        'id': 'u1',
+        'email': 'a@b.c',
+        'firstName': 'A',
+        'lastName': 'B',
+        'role': 'USER',
+        'isEmailVerified': true,
+        'createdAt': '2026-08-05T10:00:00.000Z',
+        'authProvider': 'facebook',
+      };
+      expect(AuthUser.fromJson(payload).authProvider, 'facebook');
+      expect(
+        AuthUser.fromJson({
+          ...payload,
+          'authProvider': 'google',
+        }).authProvider,
+        'google',
+      );
+    });
+
+    test('SocialLinkConfirmation carries the pending link details', () {
+      const pending = SocialLinkConfirmation(
+        email: 'a@b.c',
+        hasPassword: true,
+        idToken: 'fb-token-1',
+      );
+      expect(pending.email, 'a@b.c');
+      expect(pending.hasPassword, isTrue);
+      expect(pending.idToken, 'fb-token-1');
     });
   });
 

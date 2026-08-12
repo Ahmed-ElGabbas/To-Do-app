@@ -51,6 +51,39 @@ class AuthApi {
     );
   }
 
+  /// Confirms ownership with the account password so the Facebook identity is
+  /// linked (Decision 4 password path). Returns a fresh [AuthResult].
+  Future<AuthResult> confirmSocialLinkPassword({
+    required String idToken,
+    required String password,
+  }) async {
+    final response = await _client.post(
+      '/auth/social-link/confirm-password',
+      data: {
+        'idToken': idToken,
+        'password': password,
+      },
+    );
+    return AuthResult.fromJson(
+      _client.unwrap(response) as Map<String, dynamic>,
+    );
+  }
+
+  /// Emails a one-time confirmation link to the passwordless account owner.
+  Future<void> requestSocialLinkConfirmation({required String idToken}) async {
+    await _client.post('/auth/social-link/confirm-request', data: {
+      'idToken': idToken,
+    });
+  }
+
+  /// Confirms ownership with the emailed one-time link. After it succeeds the
+  /// user re-taps "Continue with Facebook" to complete sign-in.
+  Future<void> confirmSocialLinkEmail({required String token}) async {
+    await _client.post('/auth/social-link/confirm-email', data: {
+      'token': token,
+    });
+  }
+
   Future<AuthTokens> refresh(String refreshToken) async {
     final response = await _client.post('/auth/refresh', data: {
       'refreshToken': refreshToken,

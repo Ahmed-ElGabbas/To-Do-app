@@ -529,6 +529,175 @@ void main() {
     });
   });
 
+  group('socialLogin / Facebook link confirmation', () {
+    test('succeeds with a new or already-linked account', () async {
+      RequestOptions? captured;
+      final backend = TestBackend((options, attempt) {
+        captured = options;
+        return ok(authResultJson());
+      });
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.socialLogin(
+        idToken: 'fb-token-1',
+        provider: 'facebook',
+      );
+
+      expect(result, isTrue);
+      expect(auth.isLoggedIn, isTrue);
+      expect(auth.pendingSocialLinkConfirmation, isNull);
+      expect(captured!.data, {'idToken': 'fb-token-1', 'provider': 'facebook'});
+    });
+
+    test('flags pending confirmation when the email matches an existing password account',
+        () async {
+      final backend = TestBackend((options, attempt) => failResponse(
+            'SOCIAL_LINK_CONFIRMATION_REQUIRED',
+            'Confirmation required',
+            status: 409,
+            details: {
+              'email': 'test@test.com',
+              'provider': 'facebook',
+              'hasPassword': true,
+            },
+          ));
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.socialLogin(
+        idToken: 'fb-token-1',
+        provider: 'facebook',
+      );
+
+      expect(result, isFalse);
+      expect(auth.isLoggedIn, isFalse);
+      final pending = auth.pendingSocialLinkConfirmation;
+      expect(pending, isNotNull);
+      expect(pending!.email, 'test@test.com');
+      expect(pending.hasPassword, isTrue);
+      expect(pending.idToken, 'fb-token-1');
+    });
+
+    test('links and logs in after a correct password confirmation', () async {
+      final backend = TestBackend((options, attempt) {
+        switch ('${options.method} ${options.path}') {
+          case 'POST /auth/social-login':
+            return failResponse('SOCIAL_LINK_CONFIRMATION_REQUIRED',
+                'Confirmation required',
+                status: 409,
+                details: {
+                  'email': 'test@test.com',
+                  'provider': 'facebook',
+                  'hasPassword': true,
+                });
+          case 'POST /auth/social-link/confirm-password':
+            expect(options.data, {'idToken': 'fb-token-1', 'password': 'secret'});
+            return ok(authResultJson());
+          default:
+            throw StateError('unexpected ${options.method} ${options.path}');
+        }
+      });
+      final auth = AuthProvider(services: backend.services);
+
+      await auth.socialLogin(idToken: 'fb-token-1', provider: 'facebook');
+      expect(auth.isLoggedIn, isFalse);
+
+      final result = await auth.confirmSocialLinkPassword(password: 'secret');
+
+      expect(result, isTrue);
+      expect(auth.isLoggedIn, isTrue);
+      expect(auth.pendingSocialLinkConfirmation, isNull);
+      expect(backend.storage.accessToken, 'access-1');
+    });
+
+    test('rejects a wrong password without linking', () async {
+      final backend = TestBackend((options, attempt) {
+        switch ('${options.method} ${options.path}') {
+          case 'POST /auth/social-login':
+            return failResponse('SOCIAL_LINK_CONFIRMATION_REQUIRED',
+                'Confirmation required',
+                status: 409,
+                details: {
+                  'email': 'test@test.com',
+                  'provider': 'facebook',
+                  'hasPassword': true,
+                });
+          case 'POST /auth/social-link/confirm-password':
+            return failResponse('UNAUTHORIZED', 'Invalid password', status: 401);
+          default:
+            throw StateError('unexpected ${options.method} ${options.path}');
+        }
+      });
+      final auth = AuthProvider(services: backend.services);
+
+      await auth.socialLogin(idToken: 'fb-token-1', provider: 'facebook');
+
+      final result = await auth.confirmSocialLinkPassword(password: 'wrong');
+
+      expect(result, isFalse);
+      expect(auth.isLoggedIn, isFalse);
+      expect(auth.pendingSocialLinkConfirmation, isNotNull);
+      expect(auth.errorMessage, isNotNull);
+    });
+
+    test('requests an email confirmation for a passwordless account', () async {
+      RequestOptions? captured;
+      final backend = TestBackend((options, attempt) {
+        switch ('${options.method} ${options.path}') {
+          case 'POST /auth/social-login':
+            return failResponse('SOCIAL_LINK_CONFIRMATION_REQUIRED',
+                'Confirmation required',
+                status: 409,
+                details: {
+                  'email': 'test@test.com',
+                  'provider': 'facebook',
+                  'hasPassword': false,
+                });
+          case 'POST /auth/social-link/confirm-request':
+            captured = options;
+            return ok(null);
+          default:
+            throw StateError('unexpected ${options.method} ${options.path}');
+        }
+      });
+      final auth = AuthProvider(services: backend.services);
+
+      await auth.socialLogin(idToken: 'fb-token-1', provider: 'facebook');
+      expect(auth.pendingSocialLinkConfirmation!.hasPassword, isFalse);
+
+      final result = await auth.requestSocialLinkEmailConfirmation();
+
+      expect(result, isTrue);
+      expect(captured!.path, '/auth/social-link/confirm-request');
+      expect(captured!.data, {'idToken': 'fb-token-1'});
+    });
+
+    test('confirmSocialLinkEmail confirms with the emailed token', () async {
+      RequestOptions? captured;
+      final backend = TestBackend((options, attempt) {
+        captured = options;
+        return ok(null);
+      });
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.confirmSocialLinkEmail(token: 'token-1');
+
+      expect(result, isTrue);
+      expect(captured!.path, '/auth/social-link/confirm-email');
+      expect(captured!.data, {'token': 'token-1'});
+    });
+
+    test('confirmSocialLinkEmail fails with an invalid token', () async {
+      final backend = TestBackend((options, attempt) =>
+          failResponse('UNAUTHORIZED', 'Bad token', status: 401));
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.confirmSocialLinkEmail(token: 'bad-token');
+
+      expect(result, isFalse);
+      expect(auth.errorMessage, isNotNull);
+    });
+  });
+
   group('updateProfile', () {
     test('updates names and local extras', () async {
       final backend = TestBackend((options, attempt) {

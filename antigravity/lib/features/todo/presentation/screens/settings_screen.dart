@@ -6,6 +6,7 @@ import 'package:tasko/core/constants/strings.dart';
 import 'package:tasko/core/theme/text_styles.dart';
 import 'package:tasko/core/localization/app_localizations.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
+import 'package:tasko/core/network/models/auth.dart';
 import 'package:tasko/features/todo/presentation/state/settings_provider.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
 import 'package:tasko/shared/services/email_service.dart';
@@ -44,6 +45,17 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.lock_outline_rounded,
             label: l10n.get('change_password'),
             onTap: () => _showChangePasswordSheet(context),
+          ),
+          Divider(height: 1, indent: 72, color: theme.dividerColor),
+          _tile(
+            context,
+            icon: Icons.key_outlined,
+            label: l10n.get('sign_in_method'),
+            trailing: Text(
+              _signInMethodLabel(context.watch<AuthProvider>().user, l10n),
+              style: AppTextStyles.bodySmall.copyWith(color: theme.primaryColor),
+            ),
+            onTap: () {},
           ),
 
           _sectionHeader(context, l10n.get('notifications')),
@@ -94,6 +106,19 @@ class SettingsScreen extends StatelessWidget {
       case 'ar': return 'العربية';
       case 'fr': return 'Français';
       default: return 'English';
+    }
+  }
+
+  String _signInMethodLabel(AuthUser? user, AppLocalizations l10n) {
+    switch (user?.authProvider) {
+      case 'google':
+        return l10n.get('sign_in_method_google');
+      case 'facebook':
+        return l10n.get('sign_in_method_facebook');
+      case 'apple':
+        return l10n.get('sign_in_method_apple');
+      default:
+        return l10n.get('sign_in_method_password');
     }
   }
 
