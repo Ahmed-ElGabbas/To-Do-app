@@ -54,4 +54,13 @@ export const validationSchema = Joi.object({
   FIREBASE_PROJECT_ID: Joi.string().allow('').default(''),
   FIREBASE_SERVICE_ACCOUNT_PATH: Joi.string().allow('').default(''),
   FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().allow('').default(''),
+
+  // Deep linking (Round 4). Placeholders until a real HTTPS domain exists.
+  DEEP_LINK_BASE_URL: Joi.string().uri().default('https://tasko.example'),
+  APPLE_TEAM_ID: Joi.string().allow('').default('TEAM_ID_PLACEHOLDER'),
+  ANDROID_CERT_FINGERPRINTS: Joi.string()
+    .allow('')
+    .default(
+      '47:4E:76:0C:B2:94:C4:24:9A:7A:FC:7A:D5:BE:D6:83:70:98:95:9C:B8:C5:7C:7B:C1:33:B2:13:BE:47:8D:AD',
+    ),
 });

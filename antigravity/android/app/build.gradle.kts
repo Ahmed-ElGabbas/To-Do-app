@@ -29,6 +29,12 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Deep links (Round 4). PLACEHOLDER — replace with the real HTTPS host
+        // before App Links verify. Must match the backend DEEP_LINK_BASE_URL
+        // host and the iOS `applinks:` entitlement (see tasko-backend/.env.example).
+        // Single source of truth: AndroidManifest.xml references ${appLinksUrlHost}.
+        manifestPlaceholders["appLinksUrlHost"] = "tasko.example"
     }
 
     buildTypes {

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:tasko/core/constants/sizes.dart';
 import 'package:tasko/core/localization/app_localizations.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
+import 'package:tasko/shared/services/deep_link_service.dart';
 import 'package:tasko/features/todo/presentation/widgets/main_scaffold.dart';
 import 'package:tasko/features/auth/presentation/screens/login_screen.dart';
 import 'package:tasko/shared/services/push_service.dart';
@@ -63,6 +64,10 @@ class _SplashScreenState extends State<SplashScreen>
       if (isLoggedIn) {
         PushService.instance?.flushPendingRoute();
       }
+
+      // Cold start via a magic-link tap (Round 4): the accept screen is public
+      // so it can open for signed-out users too.
+      DeepLinkService.instance?.flushPendingRoute();
     });
   }
 

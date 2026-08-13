@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MailerModule } from '../../infrastructure/mailer/mailer.module';
+import { DeepLinkModule } from '../deep-link/deep-link.module';
 import { MemberModule } from '../member/member.module';
 import { TeamModule } from '../team/team.module';
 import { UserModule } from '../user/user.module';
@@ -17,6 +18,7 @@ import { InvitationService } from './services/invitation.service';
     MemberModule,
     UserModule,
     MailerModule,
+    DeepLinkModule,
   ],
   controllers: [InvitationController],
   providers: [

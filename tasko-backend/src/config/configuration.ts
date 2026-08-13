@@ -59,6 +59,33 @@ export default () => ({
       10,
     ),
   },
+  deepLink: {
+    /**
+     * Public HTTPS base URL used to build invitation deep links and the
+     * "Open Tasko" button on the browser landing page. PLACEHOLDER until a
+     * real domain exists — App Links / Universal Links verify over HTTPS
+     * only (Section 6). The host must match the Android intent-filter host
+     * and the iOS `applinks:` entitlement, and this domain must serve the
+     * /.well-known/ files.
+     */
+    baseUrl: process.env.DEEP_LINK_BASE_URL ?? 'https://tasko.example',
+    /**
+     * Apple Team ID used in the apple-app-site-association `appID`
+     * (TEAMID.com.tasko.app). PLACEHOLDER — requires an Apple Developer
+     * account.
+     */
+    appleTeamId: process.env.APPLE_TEAM_ID ?? 'TEAM_ID_PLACEHOLDER',
+    /**
+     * Comma-separated SHA-256 certificate fingerprints (colon-separated hex,
+     * exactly as keytool prints them) for assetlinks.json. Defaults to the
+     * debug keystore fingerprint; release builds currently sign with debug
+     * keys. Add the release fingerprint here once a real release keystore
+     * exists.
+     */
+    androidFingerprints:
+      process.env.ANDROID_CERT_FINGERPRINTS ??
+      '47:4E:76:0C:B2:94:C4:24:9A:7A:FC:7A:D5:BE:D6:83:70:98:95:9C:B8:C5:7C:7B:C1:33:B2:13:BE:47:8D:AD',
+  },
   firebase: {
     projectId: process.env.FIREBASE_PROJECT_ID ?? '',
     /**

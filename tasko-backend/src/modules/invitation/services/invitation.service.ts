@@ -217,7 +217,13 @@ export class InvitationService {
   }
 
   private invitationHtml(teamName: string, rawToken: string): string {
-    const link = `${this.config.get<string>('app.baseUrl')}/invitations/${encodeURIComponent(rawToken)}`;
+    // The invite link points at the deep-link origin so that on a phone it
+    // opens the app (Android App Links / iOS Universal Links) and in a browser
+    // it renders the landing page served by GET /invitations/:token.
+    const deepLinkBase =
+      this.config.get<string>('deepLink.baseUrl', '') ||
+      this.config.get<string>('app.baseUrl', '');
+    const link = `${deepLinkBase.replace(/\/$/, '')}/invitations/${encodeURIComponent(rawToken)}`;
     return `<p>You've been invited to join <strong>${teamName}</strong> on Tasko.</p><a href="${link}">Accept invitation</a>`;
   }
 }

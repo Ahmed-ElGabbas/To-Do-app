@@ -28,6 +28,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CategoryModule } from './modules/category/category.module';
 import { CommentModule } from './modules/comment/comment.module';
+import { DeepLinkModule } from './modules/deep-link/deep-link.module';
 import { FileModule } from './modules/file/file.module';
 import { HealthModule } from './modules/health/health.module';
 import { InvitationModule } from './modules/invitation/invitation.module';
@@ -82,6 +83,7 @@ import { UserModule } from './modules/user/user.module';
     TeamModule,
     MemberModule,
     InvitationModule,
+    DeepLinkModule,
     CommentModule,
     SearchModule,
     AnalyticsModule,

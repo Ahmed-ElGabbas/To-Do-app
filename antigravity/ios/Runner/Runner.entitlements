@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Deep links (Round 4). PLACEHOLDER — replace with the real HTTPS host
+	     before Universal Links verify. Must match the backend DEEP_LINK_BASE_URL
+	     host and the Android intent-filter host (see tasko-backend/.env.example). -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:tasko.example</string>
+	</array>
+</dict>
+</plist>

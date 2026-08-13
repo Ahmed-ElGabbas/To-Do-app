@@ -16,6 +16,7 @@ import 'package:tasko/features/collaboration/state/admin_provider.dart';
 import 'package:tasko/features/todo/presentation/screens/splash_screen.dart';
 import 'package:tasko/firebase_options.dart';
 import 'package:tasko/shared/services/crashlytics_service.dart';
+import 'package:tasko/shared/services/deep_link_service.dart';
 import 'package:tasko/shared/services/notification_service.dart';
 import 'package:tasko/shared/services/performance_service.dart';
 import 'package:tasko/shared/services/push_service.dart';
@@ -75,6 +76,12 @@ void main() async {
     notificationProvider.load();
     taskProvider.loadTasks();
   };
+
+  // Magic-link deep links (Round 4): subscribe to /invitations/<token> and
+  // buffer any link that arrives before navigation is ready.
+  final deepLink = DeepLinkService();
+  DeepLinkService.instance = deepLink;
+  deepLink.init();
 
   runApp(
     MultiProvider(
