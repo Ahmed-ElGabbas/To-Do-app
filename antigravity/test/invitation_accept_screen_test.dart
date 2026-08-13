@@ -7,8 +7,18 @@ import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/core/network/models/invitation.dart';
 import 'package:tasko/features/collaboration/presentation/screens/invitation_accept_screen.dart';
 import 'package:tasko/features/todo/presentation/state/settings_provider.dart';
+import 'package:tasko/shared/services/analytics_service.dart';
 
 import 'core/network/test_services.dart';
+
+class _SpyAnalyticsTracker implements AnalyticsTracker {
+  final events = <({String name, Map<String, Object>? parameters})>[];
+
+  @override
+  Future<void> logEvent(String name, {Map<String, Object>? parameters}) async {
+    events.add((name: name, parameters: parameters));
+  }
+}
 
 Map<String, dynamic> settingsJson() => {
       'userId': 'user-1',
@@ -79,6 +89,9 @@ void main() {
       return ok(invitationJson(status: 'accepted'));
     });
     AppServices.instance = backend.services;
+    final tracker = _SpyAnalyticsTracker();
+    AnalyticsService.instance = AnalyticsService(tracker: tracker);
+    addTearDown(() => AnalyticsService.instance = null);
 
     await tester.pumpWidget(app(backend, invitation()));
     await tester.pumpAndSettle();
@@ -87,6 +100,7 @@ void main() {
 
     expect(find.text('You have joined the team!'), findsOneWidget);
     expect(find.text('Accept Invitation'), findsNothing);
+    expect(tracker.events.single.name, 'invitation_accepted');
   });
 
   testWidgets('decline posts to /invitations/:token/decline and confirms',

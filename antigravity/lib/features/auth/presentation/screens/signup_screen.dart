@@ -14,6 +14,7 @@ import 'package:tasko/features/auth/presentation/widgets/social_link_confirmatio
 import 'package:tasko/features/auth/services/google_sign_in_service.dart';
 import 'package:tasko/features/auth/services/facebook_sign_in_service.dart';
 import 'package:tasko/features/todo/presentation/widgets/main_scaffold.dart';
+import 'package:tasko/shared/services/remote_config_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -55,7 +56,24 @@ class _SignupScreenState extends State<SignupScreen> {
       source: ImageSource.gallery,
       imageQuality: 80,
     );
-    if (picked != null) setState(() => _profileImagePath = picked.path);
+    if (picked == null) return;
+    final maxMb = RemoteConfigService.avatarMaxSizeMbClientHint;
+    final sizeMb = await File(picked.path).length() / (1024 * 1024);
+    if (sizeMb > maxMb) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)
+                .get('avatar_too_large')
+                .replaceFirst('{size}', '$maxMb'),
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+    if (mounted) setState(() => _profileImagePath = picked.path);
   }
 
   String? _validateRequired(String? value, AppLocalizations l10n) {
@@ -434,32 +452,38 @@ class _SignupScreenState extends State<SignupScreen> {
                           ),
                   ),
                 ),
-                const SizedBox(height: AppSizes.xl),
-                Row(
-                  children: [
-                    Expanded(child: Divider(color: theme.dividerColor)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSizes.sm),
-                      child: Text(
-                        l10n.get('or'),
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                if (RemoteConfigService.isSocialLoginProviderEnabled('google') ||
+                    RemoteConfigService.isSocialLoginProviderEnabled('facebook')) ...[
+                  const SizedBox(height: AppSizes.xl),
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: theme.dividerColor)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSizes.sm),
+                        child: Text(
+                          l10n.get('or'),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          ),
                         ),
                       ),
-                    ),
-                    Expanded(child: Divider(color: theme.dividerColor)),
-                  ],
-                ),
-                const SizedBox(height: AppSizes.xl),
-                GoogleSignInButton(
-                  onPressed: _signInWithGoogle,
-                  isLoading: _isLoading,
-                ),
-                const SizedBox(height: AppSizes.md),
-                FacebookSignInButton(
-                  onPressed: _signInWithFacebook,
-                  isLoading: _isLoading,
-                ),
+                      Expanded(child: Divider(color: theme.dividerColor)),
+                    ],
+                  ),
+                  const SizedBox(height: AppSizes.xl),
+                ],
+                if (RemoteConfigService.isSocialLoginProviderEnabled('google')) ...[
+                  GoogleSignInButton(
+                    onPressed: _signInWithGoogle,
+                    isLoading: _isLoading,
+                  ),
+                  const SizedBox(height: AppSizes.md),
+                ],
+                if (RemoteConfigService.isSocialLoginProviderEnabled('facebook'))
+                  FacebookSignInButton(
+                    onPressed: _signInWithFacebook,
+                    isLoading: _isLoading,
+                  ),
                 const SizedBox(height: AppSizes.xl),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

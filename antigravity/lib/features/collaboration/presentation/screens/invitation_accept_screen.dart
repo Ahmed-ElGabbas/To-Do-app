@@ -10,6 +10,7 @@ import 'package:tasko/core/network/models/invitation.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
 import 'package:tasko/features/collaboration/state/team_provider.dart';
 import 'package:tasko/features/todo/presentation/widgets/custom_button.dart';
+import 'package:tasko/shared/services/analytics_service.dart';
 
 /// Accepts or declines an invitation reached through a magic-link deep link
 /// (`https://<host>/invitations/<token>`, Round 4).
@@ -59,6 +60,7 @@ class _InvitationAcceptScreenState extends State<InvitationAcceptScreen> {
         _invitation = updated;
         _busy = false;
       });
+      AnalyticsService.invitationAccepted();
       _refreshTeamsIfLoggedIn();
     } on ApiException catch (e) {
       if (!mounted) return;

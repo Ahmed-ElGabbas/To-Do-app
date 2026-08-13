@@ -4,6 +4,7 @@ import 'package:tasko/core/network/api_error.dart';
 import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/core/network/models/auth.dart';
 import 'package:tasko/core/network/models/user.dart';
+import 'package:tasko/shared/services/analytics_service.dart';
 import 'package:tasko/shared/services/crashlytics_service.dart';
 import 'package:tasko/shared/services/performance_service.dart';
 import 'package:tasko/shared/services/push_service.dart';
@@ -182,6 +183,7 @@ class AuthProvider extends ChangeNotifier {
       await _applyAuthResult(result);
       _isLoggedIn = true;
       notifyListeners();
+      AnalyticsService.socialLoginUsed(provider: provider);
       return true;
     } on ApiException catch (e) {
       if (e.code == 'SOCIAL_LINK_CONFIRMATION_REQUIRED') {

@@ -82,8 +82,12 @@ Firebase Dynamic Links is fully shut down (since Aug 25, 2025) — confirmed liv
 - `InvitationAcceptScreen` (`lib/features/collaboration/presentation/screens/invitation_accept_screen.dart`) — pending invite with Accept/Decline, resolved-state card, l10n keys en/ar/fr.
 - Android `<intent-filter android:autoVerify>` on MainActivity (host via `appLinksUrlHost` placeholder, single source of truth); iOS `Runner.entitlements` (`applinks:` placeholder) + `CODE_SIGN_ENTITLEMENTS` + `FlutterDeepLinkingEnabled` in Info.plist.
 
-## 7. Remote Config — Architecture (later round)
+## 7. Remote Config — Architecture — DONE (Round 5)
 Five flags: collaboration_features_enabled, search_min_query_length, max_task_notes_length_client_hint, social_login_providers_enabled (JSON per-provider toggle), avatar_max_size_mb_client_hint. Never a second validation authority — UX guidance only, backend rules remain the real limits.
+
+**Flutter status — DONE** (firebase_remote_config 6.5.6):
+- `RemoteConfigService` (`lib/shared/services/remote_config_service.dart`) — best-effort `load()` (`setDefaults` + `fetchAndActivate()` with a 3s timeout, never throws), static flag accessors that fall back to bundled defaults when uninitialized (keeps widget tests hermetic).
+- Flag consumers: `side_drawer.dart` hides My Teams; `task_details_screen.dart` hides the comments entry; `search_provider.dart` skips queries shorter than `search_min_query_length`; `add_task_screen.dart` clamps notes via `max_task_notes_length_client_hint` (new optional `InputField.maxLength`); `login_screen.dart`/`signup_screen.dart` gate each social button + hide the "or" divider when `social_login_providers_enabled` disables them; `profile_screen.dart`/`signup_screen.dart` reject oversized avatars with a localized `avatar_too_large` SnackBar.
 
 ## 8. Firebase App Check — Architecture (later round, deliberately last)
 Layers on top of, never instead of, JWT auth + Throttler. New AppCheckGuard in the same APP_GUARD chain, positioned before JwtAuthGuard. Start in monitor mode (not enforce) since firebase_app_check is still pre-1.0.
@@ -96,8 +100,13 @@ Flutter-side; custom traces around task-list load, SearchProvider's query round-
 - Trace points: `task_list_load` (TaskProvider.loadTasks), `search_query` (SearchProvider.search), `avatar_upload` (AuthProvider.uploadAvatar). Trace names only — no task titles/query text as attributes.
 - Verification: `flutter analyze` clean, `flutter test` 137/137 pass, `flutter build apk --debug` succeeds.
 
-## 10. Analytics — Architecture (later round)
+## 10. Analytics — Architecture — DONE (Round 5)
 Must NOT duplicate activity_logs' audit purpose — aggregate product-usage signal only. Events: task_created, team_created, invitation_sent, invitation_accepted, comment_added, search_performed (result_count only, never raw query text), social_login_used (provider param). Never log task titles/comment bodies/search text as event params.
+
+**Flutter status — DONE** (firebase_analytics 12.4.6):
+- `AnalyticsService` (`lib/shared/services/analytics_service.dart`) — static event helpers (`taskCreated`, `teamCreated`, `invitationSent`, `invitationAccepted`, `commentAdded`, `searchPerformed`, `socialLoginUsed`) behind an injectable `AnalyticsTracker`, fired `unawaited` after the relevant mutation succeeds in each provider/screen; no-op when uninitialized (widget tests).
+- Params strictly aggregate: task_created has has_team/has_category, search_performed has result_count only, social_login_used has provider only.
+- Verification: `flutter analyze` clean, `flutter test` 181/181 pass, `flutter build apk --debug` succeeds (includes gating widget tests for the remote-config flags).
 
 ## 11. Environment & Secrets Management
 FIREBASE_SERVICE_ACCOUNT_PATH (or base64 FIREBASE_SERVICE_ACCOUNT_JSON) + FIREBASE_PROJECT_ID follow the exact .env.example/gitignore convention already used for JWT_SECRET/DB_*. firebase_options.dart / google-services.json / GoogleService-Info.plist are gitignored per Round 0.
@@ -113,7 +122,7 @@ Round 1c (follow-up commit): Facebook + the explicit link-confirmation flow (Dec
 Round 2: FCM — DONE (app commit + backend commit). Built in parallel with Round 1.
 Round 3: Crashlytics + Performance Monitoring — DONE (app commit, no backend surface).
 Round 4: App Links (independent of 1-3) — CODE-COMPLETE, ACTIVATION-PENDING (see §6: needs a real domain, Apple Team ID, release keystore fingerprint).
-Round 5: Remote Config + Analytics (build last, benefits from 1/2/4 existing first).
+Round 5: Remote Config + Analytics — DONE (app-only commit).
 Round 6: App Check (deliberately last, monitor mode first, enforce mode only after confirming real traffic passes cleanly).
 
 ===== PART 2: DECISIONS ALREADY MADE — implement accordingly, do not re-open =====

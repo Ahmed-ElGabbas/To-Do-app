@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,11 +17,13 @@ import 'package:tasko/features/collaboration/state/activity_provider.dart';
 import 'package:tasko/features/collaboration/state/admin_provider.dart';
 import 'package:tasko/features/todo/presentation/screens/splash_screen.dart';
 import 'package:tasko/firebase_options.dart';
+import 'package:tasko/shared/services/analytics_service.dart';
 import 'package:tasko/shared/services/crashlytics_service.dart';
 import 'package:tasko/shared/services/deep_link_service.dart';
 import 'package:tasko/shared/services/notification_service.dart';
 import 'package:tasko/shared/services/performance_service.dart';
 import 'package:tasko/shared/services/push_service.dart';
+import 'package:tasko/shared/services/remote_config_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +38,15 @@ void main() async {
 
   // Performance: named traces around task load / search / avatar upload.
   PerformanceService.instance = PerformanceService();
+
+  // Remote Config (Round 5): serve backend-matching defaults immediately and
+  // refresh in the background — the fetch never blocks startup.
+  final remoteConfig = RemoteConfigService();
+  RemoteConfigService.instance = remoteConfig;
+  unawaited(remoteConfig.load());
+
+  // Analytics (Round 5): aggregate product-usage events, no-op in tests.
+  AnalyticsService.instance = AnalyticsService();
 
   // Fix black nav bar
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(

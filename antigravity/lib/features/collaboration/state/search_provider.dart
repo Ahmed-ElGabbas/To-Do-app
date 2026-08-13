@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:tasko/core/network/api_error.dart';
 import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/core/network/models/search.dart';
+import 'package:tasko/shared/services/analytics_service.dart';
 import 'package:tasko/shared/services/performance_service.dart';
+import 'package:tasko/shared/services/remote_config_service.dart';
 
 /// Search results for a query. Owns loading/error state so screens can stay
 /// presentational (debouncing stays in the widget; network + state live here).
@@ -22,7 +24,8 @@ class SearchProvider extends ChangeNotifier {
 
   Future<void> search(String query) async {
     final trimmed = query.trim();
-    if (trimmed.isEmpty) {
+    final minLength = RemoteConfigService.searchMinQueryLength;
+    if (trimmed.isEmpty || trimmed.length < minLength) {
       _results = null;
       _isLoading = false;
       _errorMessage = null;
@@ -36,6 +39,7 @@ class SearchProvider extends ChangeNotifier {
       await PerformanceService.trace('search_query', () async {
         _results = await _services.searchApi.search(q: trimmed);
       });
+      AnalyticsService.searchPerformed(resultCount: _results?.total ?? 0);
     } on ApiException catch (e) {
       _errorMessage = e.message;
       _results = null;

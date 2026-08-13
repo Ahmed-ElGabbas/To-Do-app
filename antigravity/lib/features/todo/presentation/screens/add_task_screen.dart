@@ -10,6 +10,7 @@ import 'package:tasko/features/todo/domain/entities/task.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
 import 'package:tasko/features/todo/presentation/widgets/input_field.dart';
 import 'package:tasko/features/todo/presentation/widgets/priority_chip.dart';
+import 'package:tasko/shared/services/remote_config_service.dart';
 
 class AddTaskScreen extends StatefulWidget {
   final String initialDate;
@@ -191,6 +192,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                 hintText: l10n.get('notes'),
                 controller: _notesController,
                 maxLines: 4,
+                maxLength: RemoteConfigService.maxTaskNotesLengthClientHint,
               ),
               const SizedBox(height: AppSizes.xxl + AppSizes.xxl),
             ],

@@ -2,9 +2,19 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tasko/features/collaboration/state/team_provider.dart';
+import 'package:tasko/shared/services/analytics_service.dart';
 import 'package:tasko/shared/services/crashlytics_service.dart';
 
 import 'core/network/test_services.dart';
+
+class _SpyAnalyticsTracker implements AnalyticsTracker {
+  final events = <({String name, Map<String, Object>? parameters})>[];
+
+  @override
+  Future<void> logEvent(String name, {Map<String, Object>? parameters}) async {
+    events.add((name: name, parameters: parameters));
+  }
+}
 
 class _SpyCrashReporter implements CrashReporter {
   final setActiveTeamIdCalls = <String?>[];
@@ -217,5 +227,57 @@ void main() {
 
     expect(added, isFalse);
     expect(provider.errorMessage, 'nope');
+  });
+
+  test('createTeam fires the team_created analytics event', () async {
+    final backend = TestBackend((options, attempt) {
+      expect(options.method, 'POST');
+      expect(options.path, '/teams');
+      return ok({
+        'id': 'team-new',
+        'name': 'New',
+        'description': 'x',
+        'ownerId': 'user-1',
+        'createdAt': '2025-01-01T00:00:00.000Z',
+        'updatedAt': '2025-01-01T00:00:00.000Z',
+      });
+    });
+    final tracker = _SpyAnalyticsTracker();
+    AnalyticsService.instance = AnalyticsService(tracker: tracker);
+    addTearDown(() => AnalyticsService.instance = null);
+    final provider = TeamProvider(services: backend.services);
+
+    await provider.createTeam(name: 'New', description: 'x');
+
+    expect(tracker.events.single.name, 'team_created');
+  });
+
+  test('createInvitation fires the invitation_sent analytics event', () async {
+    final backend = TestBackend((options, attempt) {
+      expect(options.method, 'POST');
+      expect(options.path, '/teams/t/invitations');
+      return ok({
+        'id': 'inv-1',
+        'teamId': 't',
+        'teamName': 'T',
+        'email': 'inv@b.c',
+        'role': 'viewer',
+        'status': 'pending',
+        'expiresAt': '2026-01-01T00:00:00.000Z',
+        'createdAt': '2025-01-01T00:00:00.000Z',
+      });
+    });
+    final tracker = _SpyAnalyticsTracker();
+    AnalyticsService.instance = AnalyticsService(tracker: tracker);
+    addTearDown(() => AnalyticsService.instance = null);
+    final provider = TeamProvider(services: backend.services);
+
+    final sent = await provider.createInvitation(
+      teamId: 't',
+      email: 'inv@b.c',
+    );
+
+    expect(sent, isTrue);
+    expect(tracker.events.single.name, 'invitation_sent');
   });
 }

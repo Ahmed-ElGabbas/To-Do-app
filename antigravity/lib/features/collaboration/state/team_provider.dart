@@ -4,6 +4,7 @@ import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/core/network/models/invitation.dart';
 import 'package:tasko/core/network/models/member.dart';
 import 'package:tasko/core/network/models/team.dart';
+import 'package:tasko/shared/services/analytics_service.dart';
 import 'package:tasko/shared/services/crashlytics_service.dart';
 
 /// Teams the current user belongs to, plus the active-team selection that
@@ -79,6 +80,7 @@ class TeamProvider extends ChangeNotifier {
       _activeTeam = _teams.last;
       _syncActiveTeam();
       notifyListeners();
+      AnalyticsService.teamCreated();
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;
@@ -211,6 +213,7 @@ class TeamProvider extends ChangeNotifier {
         email: email,
         role: role,
       );
+      AnalyticsService.invitationSent();
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;

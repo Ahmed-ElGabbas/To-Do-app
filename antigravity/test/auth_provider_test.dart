@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
+import 'package:tasko/shared/services/analytics_service.dart';
 import 'package:tasko/shared/services/crashlytics_service.dart';
 import 'package:tasko/shared/services/performance_service.dart';
 import 'package:tasko/shared/services/push_service.dart';
@@ -114,6 +115,16 @@ class _SpyCrashReporter implements CrashReporter {
   @override
   void recordError(Object error, StackTrace stackTrace,
       {required bool fatal}) {}
+}
+
+/// Records analytics events so the social-login hook is observable in tests.
+class _SpyAnalyticsTracker implements AnalyticsTracker {
+  final events = <({String name, Map<String, Object>? parameters})>[];
+
+  @override
+  Future<void> logEvent(String name, {Map<String, Object>? parameters}) async {
+    events.add((name: name, parameters: parameters));
+  }
 }
 
 /// Records named performance traces so provider instrumentation is observable.
@@ -547,6 +558,24 @@ void main() {
       expect(auth.isLoggedIn, isTrue);
       expect(auth.pendingSocialLinkConfirmation, isNull);
       expect(captured!.data, {'idToken': 'fb-token-1', 'provider': 'facebook'});
+    });
+
+    test('fires the social_login_used analytics event with the provider',
+        () async {
+      final backend = TestBackend((options, attempt) => ok(authResultJson()));
+      final tracker = _SpyAnalyticsTracker();
+      AnalyticsService.instance = AnalyticsService(tracker: tracker);
+      addTearDown(() => AnalyticsService.instance = null);
+      final auth = AuthProvider(services: backend.services);
+
+      final result = await auth.socialLogin(
+        idToken: 'google-token-1',
+        provider: 'google',
+      );
+
+      expect(result, isTrue);
+      expect(tracker.events.single.name, 'social_login_used');
+      expect(tracker.events.single.parameters, {'provider': 'google'});
     });
 
     test('flags pending confirmation when the email matches an existing password account',

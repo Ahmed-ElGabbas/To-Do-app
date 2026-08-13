@@ -8,6 +8,7 @@ class InputField extends StatelessWidget {
   final TextEditingController? controller;
   final String? Function(String?)? validator;
   final int maxLines;
+  final int? maxLength;
   final TextInputType keyboardType;
   final bool readOnly;
   final VoidCallback? onTap;
@@ -22,6 +23,7 @@ class InputField extends StatelessWidget {
     this.controller,
     this.validator,
     this.maxLines = 1,
+    this.maxLength,
     this.keyboardType = TextInputType.text,
     this.readOnly = false,
     this.onTap,
@@ -47,6 +49,7 @@ class InputField extends StatelessWidget {
           controller: controller,
           validator: validator,
           maxLines: maxLines,
+          maxLength: maxLength,
           keyboardType: keyboardType,
           readOnly: readOnly,
           onTap: onTap,

@@ -18,6 +18,7 @@ import 'package:tasko/features/collaboration/presentation/screens/admin_screen.d
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
 import 'package:tasko/features/todo/presentation/state/settings_provider.dart';
 import 'package:tasko/shared/services/email_service.dart';
+import 'package:tasko/shared/services/remote_config_service.dart';
 import 'package:tasko/features/todo/presentation/screens/settings_screen.dart';
 
 class SideDrawer extends StatelessWidget {
@@ -75,18 +76,20 @@ class SideDrawer extends StatelessWidget {
                     color: contentColor,
                     onTap: () => _confirmDeleteAll(context),
                   ),
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.groups_rounded,
-                    label: l10n.get('my_teams'),
-                    color: contentColor,
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const TeamsScreen()),
-                      );
-                    },
-                  ),
+                  if (RemoteConfigService.collaborationFeaturesEnabled)
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.groups_rounded,
+                      label: l10n.get('my_teams'),
+                      color: contentColor,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                              builder: (_) => const TeamsScreen()),
+                        );
+                      },
+                    ),
                   _buildMenuItem(
                     context,
                     icon: Icons.notifications_outlined,

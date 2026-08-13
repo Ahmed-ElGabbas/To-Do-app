@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tasko/features/todo/domain/entities/task.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
+import 'package:tasko/shared/services/analytics_service.dart';
 import 'package:tasko/shared/services/performance_service.dart';
 
 import 'core/network/test_services.dart';
@@ -13,6 +14,15 @@ class _SpyPerformanceMonitor implements PerformanceMonitor {
   Future<void> trace(String name, Future<void> Function() action) async {
     traces.add(name);
     await action();
+  }
+}
+
+class _SpyAnalyticsTracker implements AnalyticsTracker {
+  final events = <({String name, Map<String, Object>? parameters})>[];
+
+  @override
+  Future<void> logEvent(String name, {Map<String, Object>? parameters}) async {
+    events.add((name: name, parameters: parameters));
   }
 }
 
@@ -253,6 +263,30 @@ void main() {
 
       expect(fake.requests, ['POST /teams/team-1/tasks']);
       expect(provider.tasks.single.teamId, 'team-1');
+    });
+
+    test('fires the task_created analytics event with team/category flags',
+        () async {
+      final fake = FakeTaskBackend();
+      final tracker = _SpyAnalyticsTracker();
+      AnalyticsService.instance = AnalyticsService(tracker: tracker);
+      addTearDown(() => AnalyticsService.instance = null);
+      final provider = TaskProvider(services: fake.backend.services);
+
+      await provider.addTask(Task(
+        id: 'local-1',
+        title: 'New task',
+        time: '09:00',
+        date: 'today',
+        teamId: 'team-1',
+        categoryId: 'cat-1',
+      ));
+
+      expect(tracker.events.single.name, 'task_created');
+      expect(tracker.events.single.parameters, {
+        'has_team': true,
+        'has_category': true,
+      });
     });
   });
 

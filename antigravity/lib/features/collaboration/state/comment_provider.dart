@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tasko/core/network/api_error.dart';
 import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/core/network/models/comment.dart';
+import 'package:tasko/shared/services/analytics_service.dart';
 
 /// Comments on a single task. Mirrors the mutation pattern used by the other
 /// collaboration providers: expose the API, keep loading/error state, and
@@ -50,6 +51,7 @@ class CommentProvider extends ChangeNotifier {
       final comment =
           await _services.commentApi.create(taskId: taskId, body: body);
       _comments.add(comment);
+      AnalyticsService.commentAdded();
       return true;
     } on ApiException catch (e) {
       _errorMessage = e.message;

@@ -11,6 +11,7 @@ import 'package:tasko/features/todo/presentation/state/task_provider.dart';
 import 'package:tasko/features/todo/presentation/screens/settings_screen.dart';
 import 'package:tasko/features/auth/presentation/screens/login_screen.dart';
 import 'package:tasko/features/todo/presentation/screens/edit_profile_screen.dart';
+import 'package:tasko/shared/services/remote_config_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   final GlobalKey<ScaffoldState>? scaffoldKey;
@@ -186,8 +187,24 @@ class _TappableAvatar extends StatelessWidget {
       final picker = ImagePicker();
       final picked = await picker.pickImage(source: source, imageQuality: 80);
       if (picked == null) return;
+      final maxMb = RemoteConfigService.avatarMaxSizeMbClientHint;
+      final file = File(picked.path);
+      final sizeMb = await file.length() / (1024 * 1024);
+      if (sizeMb > maxMb) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                l10n.get('avatar_too_large').replaceFirst('{size}', '$maxMb'),
+              ),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+        return;
+      }
       if (context.mounted) {
-        await context.read<AuthProvider>().uploadAvatar(File(picked.path));
+        await context.read<AuthProvider>().uploadAvatar(file);
       }
     } catch (_) {}
   }

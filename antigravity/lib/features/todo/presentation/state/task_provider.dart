@@ -5,6 +5,7 @@ import 'package:tasko/features/todo/data/models/task_model.dart';
 import 'package:tasko/features/todo/domain/entities/task.dart';
 import 'package:tasko/shared/services/notification_service.dart';
 import 'package:tasko/shared/services/performance_service.dart';
+import 'package:tasko/shared/services/analytics_service.dart';
 
 /// ChangeNotifier for task management backed by the Tasko backend.
 ///
@@ -98,6 +99,10 @@ class TaskProvider extends ChangeNotifier {
       final index = _tasks.indexWhere((t) => t.id == task.id);
       if (index != -1) _tasks[index] = created;
       notifyListeners();
+      AnalyticsService.taskCreated(
+        hasTeam: task.teamId != null,
+        hasCategory: task.categoryId != null,
+      );
     } on ApiException catch (e) {
       _tasks.removeWhere((t) => t.id == task.id);
       _errorMessage = e.message;

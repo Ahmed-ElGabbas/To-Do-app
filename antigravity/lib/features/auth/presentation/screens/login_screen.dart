@@ -13,6 +13,7 @@ import 'package:tasko/features/auth/presentation/widgets/social_link_confirmatio
 import 'package:tasko/features/auth/services/google_sign_in_service.dart';
 import 'package:tasko/features/auth/services/facebook_sign_in_service.dart';
 import 'package:tasko/features/todo/presentation/widgets/main_scaffold.dart';
+import 'package:tasko/shared/services/remote_config_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -304,32 +305,38 @@ class _LoginScreenState extends State<LoginScreen> {
                         : Text(l10n.get('sign_in'), style: AppTextStyles.button),
                   ),
                 ),
-                const SizedBox(height: AppSizes.xl),
-                Row(
-                  children: [
-                    Expanded(child: Divider(color: theme.dividerColor)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSizes.sm),
-                      child: Text(
-                        l10n.get('or'),
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                if (RemoteConfigService.isSocialLoginProviderEnabled('google') ||
+                    RemoteConfigService.isSocialLoginProviderEnabled('facebook')) ...[
+                  const SizedBox(height: AppSizes.xl),
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: theme.dividerColor)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSizes.sm),
+                        child: Text(
+                          l10n.get('or'),
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          ),
                         ),
                       ),
-                    ),
-                    Expanded(child: Divider(color: theme.dividerColor)),
-                  ],
-                ),
-                const SizedBox(height: AppSizes.xl),
-                GoogleSignInButton(
-                  onPressed: _signInWithGoogle,
-                  isLoading: _isLoading,
-                ),
-                const SizedBox(height: AppSizes.md),
-                FacebookSignInButton(
-                  onPressed: _signInWithFacebook,
-                  isLoading: _isLoading,
-                ),
+                      Expanded(child: Divider(color: theme.dividerColor)),
+                    ],
+                  ),
+                  const SizedBox(height: AppSizes.xl),
+                ],
+                if (RemoteConfigService.isSocialLoginProviderEnabled('google')) ...[
+                  GoogleSignInButton(
+                    onPressed: _signInWithGoogle,
+                    isLoading: _isLoading,
+                  ),
+                  const SizedBox(height: AppSizes.md),
+                ],
+                if (RemoteConfigService.isSocialLoginProviderEnabled('facebook'))
+                  FacebookSignInButton(
+                    onPressed: _signInWithFacebook,
+                    isLoading: _isLoading,
+                  ),
                 const SizedBox(height: AppSizes.xl),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
