@@ -2,4 +2,6 @@
 <resources>
     <string name="default_notification_channel_id">tasko_push</string>
     <string name="tasko_push_channel_name">Tasko notifications</string>
+    <string name="facebook_app_id" translatable="false">1487319249825251</string>
+    <string name="facebook_client_token" translatable="false">22ad9fb7c01c8917f19eea11c53b2dbf</string>
 </resources>

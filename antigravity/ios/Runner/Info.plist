@@ -70,11 +70,30 @@
 	<string>Used to set your profile picture</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Used to pick a profile picture</string>
+	<key>FacebookAppID</key>
+	<string>1487319249825251</string>
+	<key>FacebookClientToken</key>
+	<string>22ad9fb7c01c8917f19eea11c53b2dbf</string>
+	<key>FacebookDisplayName</key>
+	<string>Tasko</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fb1487319249825251</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>mailto</string>
 		<string>https</string>
 		<string>http</string>
+		<string>fbapi</string>
+		<string>fb-messenger-share-api</string>
+		<string>fbauth2</string>
+		<string>fbshareextension</string>
 	</array>
 </dict>
 </plist>
