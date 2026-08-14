@@ -132,7 +132,7 @@ Firebase Auth (incl. social), FCM, Crashlytics, Remote Config, App Check (Play I
 Round 0 (DONE): project setup, identifiers, inert Firebase init.
 Round 1 (NOW): Google Social Login — the highest-value, self-contained item.
 Round 1b (follow-up commit): Apple.
-Round 1c (follow-up commit): Facebook + the explicit link-confirmation flow (Decision 4).
+Round 1c: Facebook + the explicit link-confirmation flow (Decision 4) — DONE (app commits + backend commit).
 Round 2: FCM — DONE (app commit + backend commit). Built in parallel with Round 1.
 Round 3: Crashlytics + Performance Monitoring — DONE (app commit, no backend surface).
 Round 4: App Links (independent of 1-3) — CODE-COMPLETE, ACTIVATION-PENDING (see §6: needs a real domain, Apple Team ID, release keystore fingerprint).
