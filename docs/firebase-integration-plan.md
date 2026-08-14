@@ -89,8 +89,22 @@ Five flags: collaboration_features_enabled, search_min_query_length, max_task_no
 - `RemoteConfigService` (`lib/shared/services/remote_config_service.dart`) — best-effort `load()` (`setDefaults` + `fetchAndActivate()` with a 3s timeout, never throws), static flag accessors that fall back to bundled defaults when uninitialized (keeps widget tests hermetic).
 - Flag consumers: `side_drawer.dart` hides My Teams; `task_details_screen.dart` hides the comments entry; `search_provider.dart` skips queries shorter than `search_min_query_length`; `add_task_screen.dart` clamps notes via `max_task_notes_length_client_hint` (new optional `InputField.maxLength`); `login_screen.dart`/`signup_screen.dart` gate each social button + hide the "or" divider when `social_login_providers_enabled` disables them; `profile_screen.dart`/`signup_screen.dart` reject oversized avatars with a localized `avatar_too_large` SnackBar.
 
-## 8. Firebase App Check — Architecture (later round, deliberately last)
-Layers on top of, never instead of, JWT auth + Throttler. New AppCheckGuard in the same APP_GUARD chain, positioned before JwtAuthGuard. Start in monitor mode (not enforce) since firebase_app_check is still pre-1.0.
+## 8. Firebase App Check — Architecture — DONE (Round 6, monitor mode)
+Layers on top of, never instead of, JWT auth + Throttler. AppCheckGuard sits in the same APP_GUARD chain, positioned before JwtAuthGuard. Monitor mode first (not enforce) since firebase_app_check is still pre-1.0 (latest 0.4.6). Enforce mode is a deliberate, separate future decision — the APP_CHECK_ENFORCE env switch is wired now but stays off.
+
+**Backend status — DONE** (firebase-admin 14.2.0, monitor mode):
+- `AppCheckGuard` (`src/common/guards/app-check.guard.ts`) in the APP_GUARD chain: `ThrottlerGuard → AppCheckGuard → JwtAuthGuard → RolesGuard → TeamMembershipGuard`. Monitor mode: verifies `X-Firebase-AppCheck` via the Admin SDK (`verifyToken`) and logs `app_check_pass` / `app_check_reject` / `app_check_missing` against the request's correlation ID, but ALWAYS allows the request. `APP_CHECK_ENFORCE=true` (default false) switches to real enforcement (401 on missing/invalid) with no code change.
+- `getAppCheck()` accessor added to `FirebaseAdminService` (`src/infrastructure/firebase/firebase-admin.service.ts`), lazily initialized exactly like `getMessaging()`.
+- Skipped entirely (no log/enforce) for `/health*` and `/.well-known/*` (infra probes and verification crawlers never carry tokens) and whenever Firebase is not configured (dev/test).
+- Verification: `nest build` clean, `npm run lint` 0 errors, `npm test` 336/336, `test:e2e` 44/44, `test:integration` 37/37 — including a spec proving monitor mode never blocks a request with a missing or invalid token.
+
+**Flutter status — DONE** (firebase_app_check 0.4.6 — still pre-1.0 as the plan predicted):
+- `FirebaseAppCheck.instance.activate(providerAndroid: AndroidPlayIntegrityProvider, providerApple: AppleDeviceCheckProvider)` in `main.dart` right after `Firebase.initializeApp()`.
+- `AppCheckService` (`lib/shared/services/app_check_service.dart`) — injectable token provider, defaults to the SDK's cached token; a token fetch failure returns null so a request is never broken.
+- `AppCheckInterceptor` (`lib/core/network/api_client.dart`) — additive second interceptor alongside `AuthInterceptor`; attaches `X-Firebase-AppCheck` next to `Authorization` with no restructuring of the existing chain.
+- Verification: `flutter analyze` clean, `flutter test` 185/185 pass, `flutter build apk --debug` succeeds.
+
+**To flip to enforce later** (separate decision, NOT part of this round): register SHA-256 cert fingerprints in Firebase Console → App Check → Apps (Play Integrity) and set `APP_CHECK_ENFORCE=true`; watch monitor logs first for `app_check_missing` on `/auth/*` (debug builds need a debug token provider; sideloaded builds without Play services will log missing). The public invitation token routes (`GET/POST /invitations/:token*`) are reachable from browsers and may need a policy decision before enforcement.
 
 ## 9. Performance Monitoring — Architecture (later round) — DONE (Round 3)
 Flutter-side; custom traces around task-list load, SearchProvider's query round-trip, avatar upload.
@@ -112,7 +126,7 @@ Must NOT duplicate activity_logs' audit purpose — aggregate product-usage sign
 FIREBASE_SERVICE_ACCOUNT_PATH (or base64 FIREBASE_SERVICE_ACCOUNT_JSON) + FIREBASE_PROJECT_ID follow the exact .env.example/gitignore convention already used for JWT_SECRET/DB_*. firebase_options.dart / google-services.json / GoogleService-Info.plist are gitignored per Round 0.
 
 ## 12. Cost & Rate-Limit Awareness
-Firebase Auth (incl. social), FCM, Crashlytics, Remote Config: free at any realistic scale for this project. Apple Developer Program ($99/yr) is a real, separate cost tied to the later Apple round, not Firebase itself.
+Firebase Auth (incl. social), FCM, Crashlytics, Remote Config, App Check (Play Integrity/DeviceCheck): free at any realistic scale for this project. Apple Developer Program ($99/yr) is a real, separate cost tied to the later Apple round, not Firebase itself.
 
 ## 13. Implementation Order & Dependencies
 Round 0 (DONE): project setup, identifiers, inert Firebase init.
@@ -123,7 +137,7 @@ Round 2: FCM — DONE (app commit + backend commit). Built in parallel with Roun
 Round 3: Crashlytics + Performance Monitoring — DONE (app commit, no backend surface).
 Round 4: App Links (independent of 1-3) — CODE-COMPLETE, ACTIVATION-PENDING (see §6: needs a real domain, Apple Team ID, release keystore fingerprint).
 Round 5: Remote Config + Analytics — DONE (app-only commit).
-Round 6: App Check (deliberately last, monitor mode first, enforce mode only after confirming real traffic passes cleanly).
+Round 6: App Check — DONE (monitor mode; enforce is a separate future decision — see §8).
 
 ===== PART 2: DECISIONS ALREADY MADE — implement accordingly, do not re-open =====
 

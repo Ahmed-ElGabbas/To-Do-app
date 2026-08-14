@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,6 +19,7 @@ import 'package:tasko/features/collaboration/state/admin_provider.dart';
 import 'package:tasko/features/todo/presentation/screens/splash_screen.dart';
 import 'package:tasko/firebase_options.dart';
 import 'package:tasko/shared/services/analytics_service.dart';
+import 'package:tasko/shared/services/app_check_service.dart';
 import 'package:tasko/shared/services/crashlytics_service.dart';
 import 'package:tasko/shared/services/deep_link_service.dart';
 import 'package:tasko/shared/services/notification_service.dart';
@@ -32,6 +34,18 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // App Check (Round 6): attest client integrity via Play Integrity (Android)
+  // and DeviceCheck (iOS). Must run after Firebase.initializeApp() and before
+  // other Firebase services. The backend is in MONITOR mode, so even a failed
+  // token fetch (e.g. Play Integrity unavailable on an unregistered debug
+  // build) only means requests go out without the header — never a broken
+  // request.
+  await FirebaseAppCheck.instance.activate(
+    providerAndroid: const AndroidPlayIntegrityProvider(),
+    providerApple: const AppleDeviceCheckProvider(),
+  );
+  AppCheckService.instance = AppCheckService();
 
   // Crashlytics: install fatal-error handlers (Round 3).
   await CrashlyticsService.init();

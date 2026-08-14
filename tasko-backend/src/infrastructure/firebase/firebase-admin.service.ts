@@ -8,6 +8,7 @@ import {
   type App,
   type ServiceAccount,
 } from 'firebase-admin/app';
+import { getAppCheck, type AppCheck } from 'firebase-admin/app-check';
 import { getAuth, type Auth, type DecodedIdToken } from 'firebase-admin/auth';
 import { getMessaging, type Messaging } from 'firebase-admin/messaging';
 import { UnauthorizedError } from '../../common/errors/domain-error';
@@ -65,6 +66,14 @@ export class FirebaseAdminService {
    */
   getMessaging(): Messaging {
     return getMessaging(this.ensureInitialized());
+  }
+
+  /**
+   * Returns the default app's App Check client, initializing the SDK lazily on
+   * first use. The AppCheckGuard uses it to verify X-Firebase-AppCheck tokens.
+   */
+  getAppCheck(): AppCheck {
+    return getAppCheck(this.ensureInitialized());
   }
 
   private getAuth(): Auth {

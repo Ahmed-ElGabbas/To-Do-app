@@ -97,4 +97,16 @@ export default () => ({
     serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH ?? '',
     serviceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? '',
   },
+  appCheck: {
+    /**
+     * Monitor (false) vs enforce (true) switch for Firebase App Check.
+     * Monitor mode verifies X-Firebase-AppCheck tokens and logs the
+     * pass/reject/missing outcome per request but never blocks; enforce mode
+     * rejects missing or invalid tokens. Defaults to monitor — flipping to
+     * enforce is a deliberate, separate decision made after reviewing
+     * monitor-mode logs, and is a one-line env change here.
+     */
+    enforce:
+      (process.env.APP_CHECK_ENFORCE ?? 'false').toLowerCase() === 'true',
+  },
 });

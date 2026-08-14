@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { getApps, initializeApp } from 'firebase-admin/app';
+import { getAppCheck } from 'firebase-admin/app-check';
 import { getAuth } from 'firebase-admin/auth';
 import { getMessaging } from 'firebase-admin/messaging';
 import { UnauthorizedError } from '../../common/errors/domain-error';
@@ -139,5 +140,20 @@ describe('FirebaseAdminService', () => {
     expect(service.getMessaging()).toBeDefined();
     expect(initializeApp).toHaveBeenCalledTimes(1);
     expect(getMessaging).toHaveBeenCalled();
+  });
+
+  it('exposes the app check client, initializing lazily', () => {
+    getApps.mockReturnValue([]);
+    initializeApp.mockReturnValue(stubApp);
+    getAppCheck.mockReturnValue({ verifyToken: jest.fn() });
+
+    const service = buildService({
+      'firebase.projectId': 'tasko-test',
+      'firebase.serviceAccountJson': '{}',
+    });
+
+    expect(service.getAppCheck()).toBeDefined();
+    expect(initializeApp).toHaveBeenCalledTimes(1);
+    expect(getAppCheck).toHaveBeenCalled();
   });
 });

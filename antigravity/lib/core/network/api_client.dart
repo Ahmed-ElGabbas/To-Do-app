@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 
+import '../../shared/services/app_check_service.dart';
 import '../config/api_config.dart';
 import 'api_error.dart';
 import 'token_store.dart';
@@ -23,6 +24,7 @@ class ApiClient {
     Dio? dio,
   }) : dio = dio ?? Dio(_baseOptions()) {
     this.dio.interceptors.add(AuthInterceptor(this));
+    this.dio.interceptors.add(AppCheckInterceptor());
   }
 
   final TokenStorage tokenStore;
@@ -307,5 +309,28 @@ class AuthInterceptor extends Interceptor {
       code: options.extra['errorCode'] as String?,
       message: 'Something went wrong. Please try again.',
     );
+  }
+}
+
+/// Attaches the Firebase App Check attestation token as `X-Firebase-AppCheck`,
+/// additive to the `Authorization` header set by [AuthInterceptor].
+///
+/// When no token is available (service not initialized in tests, or the token
+/// fetch failed) the request proceeds without the header — the backend's
+/// AppCheckGuard records it as `missing` while in monitor mode, so this never
+/// breaks a request.
+class AppCheckInterceptor extends Interceptor {
+  static const header = 'X-Firebase-AppCheck';
+
+  @override
+  void onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) async {
+    final token = await AppCheckService.instance?.getToken();
+    if (token != null && token.isNotEmpty) {
+      options.headers[header] = token;
+    }
+    handler.next(options);
   }
 }

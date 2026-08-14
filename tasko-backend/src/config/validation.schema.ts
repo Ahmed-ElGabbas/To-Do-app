@@ -55,6 +55,10 @@ export const validationSchema = Joi.object({
   FIREBASE_SERVICE_ACCOUNT_PATH: Joi.string().allow('').default(''),
   FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().allow('').default(''),
 
+  // Firebase App Check (Round 6). Monitor mode by default; enforce is a
+  // deliberate, separate decision later (see configuration.ts).
+  APP_CHECK_ENFORCE: Joi.boolean().truthy('true').falsy('false').default(false),
+
   // Deep linking (Round 4). Placeholders until a real HTTPS domain exists.
   DEEP_LINK_BASE_URL: Joi.string().uri().default('https://tasko.example'),
   APPLE_TEAM_ID: Joi.string().allow('').default('TEAM_ID_PLACEHOLDER'),
