@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
+import { FirebaseAdminService } from '../../../infrastructure/firebase/firebase-admin.service';
 import { LoggerService } from '../../../common/logger/logger.service';
 import { MemberRepository } from '../../member/interfaces/member-repository';
 import { TaskRepository } from '../../task/interfaces/task-repository';
@@ -62,6 +63,7 @@ function validPayload() {
 describe('RealtimeGateway', () => {
   const jwtService = { verifyAsync: jest.fn() };
   const config = { get: jest.fn() };
+  const firebase = { isConfigured: jest.fn(), getAppCheck: jest.fn() };
   const members = { listByUser: jest.fn() };
   const eventConsumer = { bindServer: jest.fn() };
   const presence = { register: jest.fn(), unregister: jest.fn() };
@@ -84,9 +86,11 @@ describe('RealtimeGateway', () => {
     config.get.mockImplementation((key: string, fallback?: unknown) =>
       key === 'jwt.secret' ? SECRET : fallback,
     );
+    firebase.isConfigured.mockReturnValue(false);
     gateway = new RealtimeGateway(
       jwtService as unknown as JwtService,
       config as unknown as ConfigService,
+      firebase as unknown as FirebaseAdminService,
       members as unknown as MemberRepository,
       eventConsumer as unknown as RealtimeEventConsumer,
       presence as unknown as PresenceRegistry,
@@ -167,6 +171,136 @@ describe('RealtimeGateway', () => {
 
     expect(client.join).toHaveBeenCalledWith(userRoom(USER_ID));
     expect(client.join).toHaveBeenCalledTimes(1);
+  });
+
+  describe('handshake App Check (Section 11.2)', () => {
+    beforeEach(() => {
+      firebase.isConfigured.mockReturnValue(true);
+    });
+
+    it('skips verification entirely when Firebase is not configured', async () => {
+      firebase.isConfigured.mockReturnValue(false);
+      jwtService.verifyAsync.mockResolvedValue(validPayload());
+      members.listByUser.mockResolvedValue([]);
+      const client = makeClient({ token: TOKEN, appCheckToken: 'abc' });
+
+      await gateway.handleConnection(client);
+
+      expect(firebase.getAppCheck).not.toHaveBeenCalled();
+      expect(logger.warn).not.toHaveBeenCalled();
+      expect(
+        logger.info.mock.calls.some((call) =>
+          String(call[0]).startsWith('realtime_app_check_'),
+        ),
+      ).toBe(false);
+      expect(client.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('monitor mode connects and logs a missing app-check token', async () => {
+      jwtService.verifyAsync.mockResolvedValue(validPayload());
+      members.listByUser.mockResolvedValue([]);
+      const client = makeClient({ token: TOKEN });
+
+      await gateway.handleConnection(client);
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        'realtime_app_check_missing',
+        expect.objectContaining({ userId: USER_ID, enforce: false }),
+      );
+      expect(firebase.getAppCheck).not.toHaveBeenCalled();
+      expect(client.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('monitor mode verifies and logs a valid app-check token', async () => {
+      jwtService.verifyAsync.mockResolvedValue(validPayload());
+      members.listByUser.mockResolvedValue([]);
+      firebase.getAppCheck.mockReturnValue({
+        verifyToken: jest
+          .fn()
+          .mockResolvedValue({ appId: '1:123:android:abc' }),
+      });
+      const client = makeClient({ token: TOKEN, appCheckToken: 'abc' });
+
+      await gateway.handleConnection(client);
+
+      expect(firebase.getAppCheck().verifyToken).toHaveBeenCalledWith('abc');
+      expect(logger.info).toHaveBeenCalledWith(
+        'realtime_app_check_pass',
+        expect.objectContaining({
+          userId: USER_ID,
+          appId: '1:123:android:abc',
+        }),
+      );
+      expect(client.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('monitor mode never blocks an invalid app-check token', async () => {
+      jwtService.verifyAsync.mockResolvedValue(validPayload());
+      members.listByUser.mockResolvedValue([]);
+      firebase.getAppCheck.mockReturnValue({
+        verifyToken: jest
+          .fn()
+          .mockRejectedValue(new Error('App Check token has expired')),
+      });
+      const client = makeClient({ token: TOKEN, appCheckToken: 'bad' });
+
+      await gateway.handleConnection(client);
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        'realtime_app_check_reject',
+        expect.objectContaining({
+          userId: USER_ID,
+          enforce: false,
+          message: 'App Check token has expired',
+        }),
+      );
+      expect(client.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('enforce mode rejects a missing app-check token', async () => {
+      config.get.mockImplementation((key: string, fallback?: unknown) =>
+        key === 'appCheck.enforce'
+          ? true
+          : key === 'jwt.secret'
+            ? SECRET
+            : fallback,
+      );
+      jwtService.verifyAsync.mockResolvedValue(validPayload());
+      members.listByUser.mockResolvedValue([]);
+      const client = makeClient({ token: TOKEN });
+
+      await gateway.handleConnection(client);
+
+      expect(client.emit).toHaveBeenCalledWith(REALTIME_EVENTS.AUTH_ERROR, {
+        code: 'APP_CHECK_FAILED',
+        message: 'App Check token is required',
+      });
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('enforce mode rejects an invalid app-check token', async () => {
+      config.get.mockImplementation((key: string, fallback?: unknown) =>
+        key === 'appCheck.enforce'
+          ? true
+          : key === 'jwt.secret'
+            ? SECRET
+            : fallback,
+      );
+      jwtService.verifyAsync.mockResolvedValue(validPayload());
+      members.listByUser.mockResolvedValue([]);
+      firebase.getAppCheck.mockReturnValue({
+        verifyToken: jest.fn().mockRejectedValue(new Error('expired')),
+      });
+      const client = makeClient({ token: TOKEN, appCheckToken: 'bad' });
+
+      await gateway.handleConnection(client);
+
+      expect(client.emit).toHaveBeenCalledWith(REALTIME_EVENTS.AUTH_ERROR, {
+        code: 'APP_CHECK_FAILED',
+        message: 'App Check verification failed',
+      });
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+    });
   });
 
   describe('packet rate limiting', () => {

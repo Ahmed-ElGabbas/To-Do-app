@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { LoggerModule } from '../../common/logger/logger.module';
 import { TaskEventsModule } from '../../infrastructure/events/task-events.module';
+import { FirebaseModule } from '../../infrastructure/firebase/firebase.module';
 import { AuthModule } from '../auth/auth.module';
 import { CommentModule } from '../comment/comment.module';
 import { MemberModule } from '../member/member.module';
@@ -27,6 +28,7 @@ import { InMemoryRealtimeRateLimiter } from './services/realtime-rate-limiter.se
   imports: [
     LoggerModule,
     TaskEventsModule,
+    FirebaseModule,
     AuthModule,
     MemberModule,
     TaskModule,

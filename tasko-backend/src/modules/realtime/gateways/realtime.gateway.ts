@@ -9,6 +9,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { FirebaseAdminService } from '../../../infrastructure/firebase/firebase-admin.service';
 import { LoggerService } from '../../../common/logger/logger.service';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { MemberRepository } from '../../member/interfaces/member-repository';
@@ -46,6 +47,11 @@ interface TypingPayload {
  * The team list is cached on the socket at connect time so the offline
  * broadcast needs no DB query and stays consistent with room membership.
  *
+ * App Check (R8, Section 11.2): the handshake also carries the client's App
+ * Check attestation (`auth.appCheckToken`), verified monitor-mode through the
+ * same FirebaseAdminService as the HTTP guard — logged, never blocking unless
+ * `APP_CHECK_ENFORCE=true`.
+ *
  * CORS mirrors `app.corsOrigin` (same env var + default as configuration.ts)
  * so sockets and the REST API share one origin policy; a Flutter client is
  * unaffected by CORS either way.
@@ -64,6 +70,7 @@ export class RealtimeGateway
   constructor(
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly firebase: FirebaseAdminService,
     private readonly members: MemberRepository,
     private readonly eventConsumer: RealtimeEventConsumer,
     private readonly presence: PresenceRegistry,
@@ -94,6 +101,7 @@ export class RealtimeGateway
         role: payload.role,
       };
       client.data.user = user;
+      await this.verifyAppCheck(client);
       this.registerPacketMiddleware(client, user);
       client.on(REALTIME_EVENTS.TYPING, (raw: unknown) => {
         void this.handleTyping(client, raw);
@@ -201,6 +209,62 @@ export class RealtimeGateway
   private extractToken(client: Socket): string | undefined {
     const auth = client.handshake.auth as Record<string, unknown> | undefined;
     return typeof auth?.token === 'string' ? auth.token : undefined;
+  }
+
+  /**
+   * Monitor-mode Firebase App Check (Section 11.2), mirroring AppCheckGuard
+   * for the socket transport. The client includes its App Check attestation in
+   * the handshake `auth` as `appCheckToken`; when Firebase is configured the
+   * token is verified with the same FirebaseAdminService and the outcome is
+   * logged (`realtime_app_check_pass` / `realtime_app_check_reject` /
+   * `realtime_app_check_missing`). In monitor mode (`APP_CHECK_ENFORCE=false`)
+   * the connection always proceeds; flipping `APP_CHECK_ENFORCE=true` rejects
+   * missing/invalid tokens — one boolean, exactly like the HTTP guard. Skipped
+   * entirely (no log) when Firebase is not configured (dev/test).
+   */
+  private async verifyAppCheck(client: Socket): Promise<void> {
+    if (!this.firebase.isConfigured()) {
+      return;
+    }
+    const enforce = this.config.get<boolean>('appCheck.enforce', false);
+    const userId = (client.data.user as AuthenticatedUser | undefined)?.id;
+    const auth = client.handshake.auth as Record<string, unknown> | undefined;
+    const rawToken = auth?.appCheckToken;
+    const token =
+      typeof rawToken === 'string' && rawToken.trim() !== ''
+        ? rawToken.trim()
+        : null;
+
+    if (!token) {
+      this.logger.warn('realtime_app_check_missing', { userId, enforce });
+      if (enforce) {
+        this.reject(client, 'APP_CHECK_FAILED', 'App Check token is required');
+      }
+      return;
+    }
+
+    try {
+      const result = await this.firebase.getAppCheck().verifyToken(token);
+      this.logger.info('realtime_app_check_pass', {
+        userId,
+        appId: result.appId,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Invalid App Check token';
+      this.logger.warn('realtime_app_check_reject', {
+        userId,
+        enforce,
+        message,
+      });
+      if (enforce) {
+        this.reject(
+          client,
+          'APP_CHECK_FAILED',
+          'App Check verification failed',
+        );
+      }
+    }
   }
 
   private reject(client: Socket, code: string, message: string): void {

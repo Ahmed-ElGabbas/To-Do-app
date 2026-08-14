@@ -80,6 +80,9 @@ export class RealtimeEventConsumer implements TaskEventConsumer, OnModuleInit {
       case TaskEventType.MEMBER_REMOVED:
         await this.onMemberRemoved(event);
         break;
+      case TaskEventType.SESSIONS_REVOKED:
+        await this.onSessionsRevoked(event);
+        break;
       // TASK_ASSIGNED and USER_ROLE_CHANGED are deliberately not broadcast.
       default:
         break;
@@ -168,6 +171,27 @@ export class RealtimeEventConsumer implements TaskEventConsumer, OnModuleInit {
       payload: { teamId: event.teamId, userId: event.userId },
     };
     this.server.to(room).emit(REALTIME_EVENTS.MEMBER_REMOVED, wireEvent);
+  }
+
+  /**
+   * Sessions revoked (logout-all / password change / reset): force-disconnect
+   * every socket of the user with an `auth_error`. The client treats
+   * `auth_error` as a handshake failure, tries one refresh — which fails
+   * because the user's refresh tokens were just revoked — and signs out
+   * (Section 2.2, R8).
+   */
+  private async onSessionsRevoked(event: TaskEvent): Promise<void> {
+    if (!this.server) {
+      return;
+    }
+    const sockets = await this.server.in(userRoom(event.userId)).fetchSockets();
+    for (const socket of sockets) {
+      socket.emit(REALTIME_EVENTS.AUTH_ERROR, {
+        code: 'SESSION_REVOKED',
+        message: 'Your session has been revoked',
+      });
+      socket.disconnect(true);
+    }
   }
 
   private emitToTaskScope(

@@ -11,6 +11,11 @@ import { AuthProvider } from '../../common/constants/auth-provider.enum';
 import { Role } from '../../common/constants/role.enum';
 import { FirebaseAdminService } from '../../infrastructure/firebase/firebase-admin.service';
 import { MailerService } from '../../infrastructure/mailer/mailer.service';
+import {
+  TaskEventType,
+  type TaskEvent,
+} from '../../infrastructure/events/task-event';
+import { TaskEventBus } from '../../infrastructure/events/task-event-bus.service';
 import { UserService } from '../user/user.service';
 import { AuthService } from './auth.service';
 import { SocialProvider } from './dto/social-login.dto';
@@ -36,6 +41,7 @@ describe('AuthService', () => {
   };
   const mailer = { sendMail: jest.fn() };
   const firebaseAdmin = { verifyIdToken: jest.fn() };
+  const eventBus = { publish: jest.fn() };
   const refreshRepo = {
     findOne: jest.fn(),
     insert: jest.fn(),
@@ -92,6 +98,7 @@ describe('AuthService', () => {
         { provide: ConfigService, useValue: config },
         { provide: MailerService, useValue: mailer },
         { provide: FirebaseAdminService, useValue: firebaseAdmin },
+        { provide: TaskEventBus, useValue: eventBus },
         {
           provide: getRepositoryToken(RefreshTokenEntity),
           useValue: refreshRepo,
@@ -781,6 +788,25 @@ describe('AuthService', () => {
     });
   });
 
+  describe('logoutAll', () => {
+    it('revokes every session and publishes SESSIONS_REVOKED', async () => {
+      await service.logoutAll(user.id);
+
+      expect(refreshRepo.update).toHaveBeenCalledWith(
+        { userId: user.id },
+        { isRevoked: true, revokedAt: expect.any(Date) },
+      );
+      expect(eventBus.publish).toHaveBeenCalledTimes(1);
+      const published = eventBus.publish.mock.calls[0][0] as TaskEvent;
+      expect(published).toMatchObject({
+        type: TaskEventType.SESSIONS_REVOKED,
+        userId: user.id,
+      });
+      expect(published.id).toBeTruthy();
+      expect(published.occurredAt).toBeTruthy();
+    });
+  });
+
   describe('changePassword', () => {
     it('verifies the current password, updates the hash, and revokes sessions', async () => {
       const passwordHash = await argon2.hash('currentpassword1');
@@ -802,6 +828,9 @@ describe('AuthService', () => {
         { userId: user.id },
         expect.anything(),
       );
+      expect(
+        (eventBus.publish.mock.calls[0]?.[0] as TaskEvent | undefined)?.type,
+      ).toBe(TaskEventType.SESSIONS_REVOKED);
     });
 
     it('rejects a wrong current password', async () => {

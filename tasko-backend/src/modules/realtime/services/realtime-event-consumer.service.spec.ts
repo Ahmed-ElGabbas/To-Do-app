@@ -299,6 +299,37 @@ describe('RealtimeEventConsumer', () => {
     });
   });
 
+  describe('sessions.revoked', () => {
+    it('disconnects every socket of the user with an auth_error', async () => {
+      bindServer();
+      const socket = { emit: jest.fn(), disconnect: jest.fn() };
+      rooms.fetchSockets.mockResolvedValue([socket]);
+
+      await consumer.handle(
+        makeEvent(TaskEventType.SESSIONS_REVOKED, { userId: REMOVED }),
+      );
+
+      expect(server.in).toHaveBeenCalledWith(userRoom(REMOVED));
+      expect(socket.emit).toHaveBeenCalledWith(REALTIME_EVENTS.AUTH_ERROR, {
+        code: 'SESSION_REVOKED',
+        message: 'Your session has been revoked',
+      });
+      expect(socket.disconnect).toHaveBeenCalledWith(true);
+      expect(server.to).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the user has no live sockets', async () => {
+      bindServer();
+      rooms.fetchSockets.mockResolvedValue([]);
+
+      await consumer.handle(
+        makeEvent(TaskEventType.SESSIONS_REVOKED, { userId: REMOVED }),
+      );
+
+      expect(rooms.emit).not.toHaveBeenCalled();
+    });
+  });
+
   it('skips TASK_ASSIGNED and USER_ROLE_CHANGED without emitting', async () => {
     bindServer();
     await consumer.handle(makeEvent(TaskEventType.TASK_ASSIGNED));

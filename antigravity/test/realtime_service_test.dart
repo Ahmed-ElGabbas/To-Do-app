@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 import 'package:tasko/core/network/api_error.dart';
+import 'package:tasko/shared/services/app_check_service.dart';
 import 'package:tasko/shared/services/realtime_service.dart';
 
 import 'core/network/test_services.dart';
@@ -131,6 +132,34 @@ void main() {
       expect(opts['auth'], {'token': 'tok-1'});
       expect(opts['autoConnect'], false);
       expect(fake.log, contains('connect'));
+    });
+
+    test('includes the App Check attestation in the handshake when active',
+        () async {
+      await backend.storage.write(accessToken: 'tok-1', refreshToken: 'rt');
+      AppCheckService.instance =
+          AppCheckService(tokenProvider: () async => 'ac-token-1');
+      addTearDown(() => AppCheckService.instance = null);
+
+      await service.connect();
+
+      expect(factoryCalls, 1);
+      final opts = capturedOptions!.build();
+      expect(opts['auth'], {'token': 'tok-1', 'appCheckToken': 'ac-token-1'});
+    });
+
+    test('opens the socket without appCheckToken when App Check fetch fails',
+        () async {
+      await backend.storage.write(accessToken: 'tok-1', refreshToken: 'rt');
+      AppCheckService.instance = AppCheckService(
+        tokenProvider: () async => throw StateError('unavailable'),
+      );
+      addTearDown(() => AppCheckService.instance = null);
+
+      await service.connect();
+
+      final opts = capturedOptions!.build();
+      expect(opts['auth'], {'token': 'tok-1'});
     });
 
     test('no-ops without a stored token', () async {

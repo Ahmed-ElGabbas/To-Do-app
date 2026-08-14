@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 import 'package:tasko/core/config/api_config.dart';
 import 'package:tasko/core/network/app_services.dart';
+import 'package:tasko/shared/services/app_check_service.dart';
 
 /// Thin, injectable facade over a Socket.IO socket so [RealtimeService] stays
 /// unit testable (`socket_io.io` cannot be constructed in tests). Mirrors how
@@ -236,7 +237,7 @@ class RealtimeService {
     try {
       final token = await _services.tokenStore.readAccessToken();
       if (token == null || token.isEmpty) return;
-      _open(token);
+      _open(token, await _fetchAppCheckToken());
     } finally {
       _connecting = false;
     }
@@ -260,13 +261,30 @@ class RealtimeService {
 
   // ── Connection lifecycle ──────────────────────────────────────────────────
 
-  void _open(String token) {
+  /// The Firebase App Check attestation is sent in the handshake so the
+  /// gateway can verify it in monitor mode (Section 11.2 / R8). Returns null
+  /// when App Check is not active (dev builds), mirroring how the HTTP layer
+  /// conditionally attaches the `X-Firebase-AppCheck` header.
+  Future<String?> _fetchAppCheckToken() async {
+    try {
+      return await AppCheckService.instance?.getToken();
+    } catch (error) {
+      debugPrint('RealtimeService: app check token unavailable: $error');
+      return null;
+    }
+  }
+
+  void _open(String token, [String? appCheckToken]) {
     _refreshAttempted = false;
     _connected = false;
+    final auth = <String, dynamic>{'token': token};
+    if (appCheckToken != null && appCheckToken.isNotEmpty) {
+      auth['appCheckToken'] = appCheckToken;
+    }
     final options = socket_io.OptionBuilder()
         .disableAutoConnect()
         .setTransports(['websocket'])
-        .setAuth({'token': token});
+        .setAuth(auth);
     final connection = _connectionFactory(_baseUrl, options);
     _connection = connection;
     _registerHandlers(connection);
@@ -334,7 +352,7 @@ class RealtimeService {
       _failSession();
       return;
     }
-    _open(newToken);
+    _open(newToken, await _fetchAppCheckToken());
   }
 
   void _failSession() {

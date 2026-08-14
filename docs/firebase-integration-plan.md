@@ -106,6 +106,8 @@ Layers on top of, never instead of, JWT auth + Throttler. AppCheckGuard sits in 
 
 **To flip to enforce later** (separate decision, NOT part of this round): register SHA-256 cert fingerprints in Firebase Console → App Check → Apps (Play Integrity) and set `APP_CHECK_ENFORCE=true`; watch monitor logs first for `app_check_missing` on `/auth/*` (debug builds need a debug token provider; sideloaded builds without Play services will log missing). The public invitation token routes (`GET/POST /invitations/:token*`) are reachable from browsers and may need a policy decision before enforcement.
 
+**Realtime extension — DONE (R8, still monitor mode):** the same App Check coverage now reaches the Socket.IO handshake. The Flutter client sends its attestation as `auth.appCheckToken` next to `auth.token` (fetched via the same `AppCheckService` facade, null-safe like the HTTP header); `RealtimeGateway.verifyAppCheck` (`src/modules/realtime/gateways/realtime.gateway.ts`) verifies it with the same `FirebaseAdminService.getAppCheck().verifyToken()` and logs `realtime_app_check_pass` / `realtime_app_check_reject` / `realtime_app_check_missing`. It reuses the identical `appCheck.enforce` boolean from `APP_CHECK_ENFORCE` — when enforce is eventually flipped for HTTP, sockets are covered too, no second switch. Skipped (no log) when Firebase is not configured. Verification: backend `nest build` clean, `npm run lint` 0 errors, `npm test` 385/385, `test:integration` 46/46; Flutter `flutter analyze` clean, `flutter test` 223/223.
+
 ## 9. Performance Monitoring — Architecture (later round) — DONE (Round 3)
 Flutter-side; custom traces around task-list load, SearchProvider's query round-trip, avatar upload.
 

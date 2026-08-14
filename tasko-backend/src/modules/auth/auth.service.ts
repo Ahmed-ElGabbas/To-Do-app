@@ -16,6 +16,11 @@ import { Role } from '../../common/constants/role.enum';
 import { AuthProvider } from '../../common/constants/auth-provider.enum';
 import { MailerService } from '../../infrastructure/mailer/mailer.service';
 import { FirebaseAdminService } from '../../infrastructure/firebase/firebase-admin.service';
+import {
+  TaskEventType,
+  type TaskEvent,
+} from '../../infrastructure/events/task-event';
+import { TaskEventBus } from '../../infrastructure/events/task-event-bus.service';
 import { UserService } from '../user/user.service';
 import { UserEntity } from '../user/entities/user.entity';
 import { EmailVerificationTokenEntity } from './entities/email-verification-token.entity';
@@ -72,6 +77,7 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly mailer: MailerService,
     private readonly firebaseAdmin: FirebaseAdminService,
+    private readonly eventBus: TaskEventBus,
     @InjectRepository(RefreshTokenEntity)
     private readonly refreshRepo: Repository<RefreshTokenEntity>,
     @InjectRepository(EmailVerificationTokenEntity)
@@ -518,6 +524,21 @@ export class AuthService {
       { userId },
       { isRevoked: true, revokedAt: new Date() },
     );
+    // Tell the realtime layer to tear down the user's live sockets; the
+    // client's `auth_error` refresh then fails against the revoked tokens and
+    // it signs out everywhere (Section 2.2, R8).
+    await this.publishSessionsRevoked(userId);
+  }
+
+  private async publishSessionsRevoked(userId: string): Promise<void> {
+    const event: TaskEvent = {
+      id: randomUUID(),
+      type: TaskEventType.SESSIONS_REVOKED,
+      userId,
+      occurredAt: new Date().toISOString(),
+      data: {},
+    };
+    await this.eventBus.publish(event);
   }
 
   private hashToken(raw: string): string {

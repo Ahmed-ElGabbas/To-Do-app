@@ -203,6 +203,19 @@ Single upload surface, `POST /files/avatar`, fully detailed in Section 3. Restat
 
 ---
 
+## 9. Realtime (Socket.IO) Transport — companion note (R8)
+
+The HTTP surface above is the system of record for writes; the realtime layer is a read/notification fan-out channel, never a second write path. Its full architecture (events, wire envelope, rooms, presence, limits) lives in `docs/realtime-architecture-plan.md`; this section only pins the transport facts a REST consumer needs to know:
+
+- **Endpoint:** Socket.IO on the same server/port as the API (`/socket.io` default path), CORS mirroring `app.corsOrigin`.
+- **Handshake auth:** `auth: { token, appCheckToken? }` — the JWT is identical to the `Authorization: Bearer` token used by the HTTP layer; a handshake without it gets `auth_error { code: 'UNAUTHORIZED' }`. `appCheckToken` is the Firebase App Check attestation, verified in monitor mode by `RealtimeGateway` (same `FirebaseAdminService` as the HTTP `AppCheckGuard`) and logged as `realtime_app_check_pass` / `realtime_app_check_reject` / `realtime_app_check_missing`; connections are only blocked when `APP_CHECK_ENFORCE=true`.
+- **One client→server packet:** `typing` (relayed to the team room). Everything else is REST. Per-socket packet rate limit mirrors the HTTP throttler (`REALTIME_RATE_LIMIT_*`); over-budget sockets get a wire `error` with `code: 'RATE_LIMITED'`.
+- **Server→client events** (Section 3.4 envelope: `{ eventId, occurredAt, actor?, payload }`): `task.created` / `task.updated` / `task.completed` / `task.reopened` / `task.deleted`, `comment.added`, `invitation.accepted`, `member.removed` (no `actor`), `user.online` / `user.offline`, `typing`. `auth_error` is the connection-level failure signal.
+- **Session revocation:** `logout-all`, password change, and password reset revoke every refresh token and emit a domain `sessions.revoked` event; the realtime layer answers it by disconnecting the user's live sockets with `auth_error { code: 'SESSION_REVOKED' }`, so the client's one-try refresh fails and it signs out everywhere (Section 2.2 of the plan).
+- **No HTTP endpoints are duplicated over the socket** — clients always re-sync via REST (e.g. after reconnect) rather than through event replay.
+
+---
+
 ## Validation statement
 
 I validated this document by going back through Section 3 and re-checking every DTO's field list and validator chain against the actual `.dto.ts` file I'd read, and every listed error code against the actual `throw new ...Error(...)` call sites found by the Section 4 grep — not against my own notes or memory. The 94-endpoint count and the 22-controller count are both direct, re-counted tallies, not carried over from an earlier session.

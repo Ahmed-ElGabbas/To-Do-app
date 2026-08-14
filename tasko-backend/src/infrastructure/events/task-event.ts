@@ -19,6 +19,11 @@ export enum TaskEventType {
   // realtime layer can force-leave the removed user's sockets and refresh the
   // remaining members' rosters. Deliberately produces no notification.
   MEMBER_REMOVED = 'member.removed',
+  // Emitted when every refresh token of a user is revoked (logout-all,
+  // password change/reset). The realtime layer force-disconnects the user's
+  // sockets with an `auth_error`; the client's refresh then fails (revoked)
+  // and it signs out. Deliberately produces no notification.
+  SESSIONS_REVOKED = 'sessions.revoked',
 }
 
 export interface TaskEventData {
