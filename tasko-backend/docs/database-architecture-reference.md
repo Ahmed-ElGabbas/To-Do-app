@@ -1,6 +1,6 @@
 # Tasko Backend — Database Architecture Reference
 
-**Status:** Documents the database exactly as it exists in the current codebase, verified directly against every entity file, both migrations (baseline + findings fixes), and every ADR. Nothing here is proposed or aspirational unless explicitly labeled as a finding/recommendation in Section 10.
+**Status:** Documents the database exactly as it exists in the current codebase, verified directly against every entity file, every migration (baseline, findings fixes, auth-provider column, facebook-social-link), and every ADR. Nothing here is proposed or aspirational unless explicitly labeled as a finding/recommendation in Section 10.
 **Engine decision (not up for debate in this document):** TypeORM on PostgreSQL in production, SQLite as the local/test convenience tier. This document describes that reality precisely; it does not propose an alternative.
 
 ---
@@ -26,7 +26,7 @@
 ### UUID strategy
 Verified per-entity, not assumed uniform:
 - **Task** — the one entity with a documented, deliberate **client-generated UUID** strategy: *"the id is normally supplied by the Tasko client (UUID v4) so optimistic updates stay idempotent; the server generates one only when omitted"* (comment directly on `TaskEntity`). This is a real behavioral decision, not just a comment — `CreateTaskDto` accepts an optional `id`.
-- **Every other entity** (`User`, `Team`, `Category`, `Tag`, `Comment`, `Invitation`, `File`, `UserSettings`, `RefreshToken`, `PasswordResetToken`, `EmailVerificationToken`, `ActivityLog`, `Notification`, `UserDevice`, `TeamMember`) uses `@PrimaryGeneratedColumn('uuid')` — server-generated. On Postgres, the migration gives these a `uuid_generate_v4()` default; on sqlite, TypeORM generates the UUID in application code before insert (sqlite has no native UUID generation function, so this is an intentional driver-conditional accommodation, not an inconsistency — see the `uuidPk()` helper in the baseline migration, which only sets `.default` when `postgres === true`).
+- **Every other entity** (`User`, `Team`, `Category`, `Tag`, `Comment`, `Invitation`, `File`, `UserSettings`, `RefreshToken`, `PasswordResetToken`, `EmailVerificationToken`, `SocialLinkConfirmToken`, `ActivityLog`, `Notification`, `UserDevice`, `TeamMember`) uses `@PrimaryGeneratedColumn('uuid')` — server-generated. On Postgres, the migration gives these a `uuid_generate_v4()` default; on sqlite, TypeORM generates the UUID in application code before insert (sqlite has no native UUID generation function, so this is an intentional driver-conditional accommodation, not an inconsistency — see the `uuidPk()` helper in the baseline migration, which only sets `.default` when `postgres === true`).
 
 ---
 
@@ -48,6 +48,7 @@ erDiagram
     USERS ||--o{ NOTIFICATIONS : "receives (user_id, no FK)"
     USERS ||--o{ ACTIVITY_LOGS : "has (user_id, no FK)"
     USERS ||--o{ USER_DEVICES : "registers (user_id, no FK)"
+    USERS ||--o{ SOCIAL_LINK_CONFIRM_TOKENS : "has (user_id, no FK)"
     USERS ||--o| FILES : "avatar_file_id (no FK, denormalized)"
 
     TEAMS ||--o{ TEAM_MEMBERS : "has (FK, CASCADE)"
@@ -69,6 +70,8 @@ erDiagram
         varchar role
         boolean is_email_verified
         uuid avatar_file_id "no FK"
+        varchar auth_provider
+        varchar facebook_account_id "nullable"
     }
     TEAMS {
         uuid id PK
@@ -173,6 +176,13 @@ erDiagram
         uuid user_id "no FK"
         varchar token UK
     }
+    SOCIAL_LINK_CONFIRM_TOKENS {
+        uuid id PK
+        uuid user_id "no FK"
+        varchar token_hash UK
+        varchar provider
+        varchar provider_account_id
+    }
 ```
 
 *Diagram note:* every relationship labeled "no FK" is a real, deliberate schema state confirmed directly in the migrations — not a diagramming shorthand. See Section 4 and Section 10 for why. The former lone exception (`files.user_id` had an FK) no longer exists — the schema is now uniform.
@@ -194,9 +204,13 @@ erDiagram
 | `email_verified_at` | datetime | yes | — | |
 | `last_login_at` | datetime | yes | — | |
 | `avatar_file_id` | uuid | yes | — | Denormalized pointer into `files`; no FK (see Section 4) |
+| `auth_provider` | varchar(20) | no | `'password'` | `AuthProvider` enum: `password` \| `google` \| `apple` \| `facebook` — creation-time marker, set only at account creation, never overwritten by later social links |
+| `facebook_account_id` | varchar(255) | yes | — | Confirmed Facebook identity (the Firebase `sub` of the verified ID token); NULL until a Facebook sign-in is explicitly confirmed (Decision 4) |
 | `created_at` / `updated_at` | timestamp | no | — | |
 
 **PK strategy:** server-generated UUID. **FKs:** none — this table is only ever a *target*, never a source, of FK relationships. **Unique constraints:** `email` (unique index). **Soft delete:** none — this table uses hard delete (no `deletedAt`/`isDeleted` column anywhere in the entity, and no soft-delete decorator such as `@DeleteDateColumn`). There is currently no account-deletion endpoint anywhere in the API, so this has never been exercised in practice — see Section 10.
+
+**Multi-provider exception to the one-sign-in-method model:** `auth_provider` records only the *original* sign-up method and is never overwritten when a later social login is linked. Facebook is the one place a second provider can be attached to an account: the confirmed identity lives in `facebook_account_id` (set only through the explicit Decision 4 confirmation flow — password proof or the emailed one-time link — never silently by email match). There is deliberately no general multi-provider linking table.
 
 ### `teams` — `src/modules/team/entities/team.entity.ts`
 | Column | Type | Null | Default | Purpose |
@@ -307,6 +321,20 @@ One row per user (`user_id` unique index, no FK). Columns: `dark_mode` (bool, de
 ### `refresh_tokens` / `password_reset_tokens` / `email_verification_tokens`
 All three share the same shape: `id`, `user_id` (indexed, **no FK**), `token_hash` (varchar(64), **unique**), `expires_at` (not null), `created_at`. `refresh_tokens` additionally has `family_id` (uuid, **indexed** via `IDX_refresh_tokens_family_id` — the family-revocation query `WHERE family_id = X` is an index seek, not a scan) and `is_revoked`/`revoked_at`; the other two have `consumed_at` (nullable) instead. See Section 6 for the full session-model mechanics.
 
+### `social_link_confirm_tokens` — `src/modules/auth/entities/social-link-confirm-token.entity.ts`
+| Column | Type | Null | Default | Purpose |
+|---|---|---|---|---|
+| `id` | uuid | no | `uuid_generate_v4()` (pg only) | PK |
+| `user_id` | uuid, indexed | no | — | **No FK** — the account the Facebook identity is being confirmed against |
+| `token_hash` | varchar(64) | no | — | SHA-256 hash of the raw one-time token, **unique** |
+| `provider` | varchar(20) | no | — | Social provider being confirmed (always `facebook` for now) |
+| `provider_account_id` | varchar(255) | no | — | The pending provider identity to bind once confirmed (the Firebase `sub`) |
+| `expires_at` | datetime | no | — | One-hour TTL (`SOCIAL_LINK_CONFIRM_TOKEN_TTL_MS`) |
+| `consumed_at` | datetime | yes | — | Set when the emailed link is clicked |
+| `created_at` | timestamp | no | — | |
+
+**Purpose:** one-time email-confirmation tokens for Facebook account linking (Decision 4). Same shape and lifecycle as `password_reset_tokens`/`email_verification_tokens` (opaque raw token, hash-only storage, expires/consumed flags) but **additionally binds the `provider` and the pending `provider_account_id`**, so clicking the emailed link can persist the link without the client re-presenting the ID token. Tokens are only ever issued for passwordless accounts (a password account confirms via `POST /auth/social-link/confirm-password` instead). **Indexes:** `IDX_social_link_confirm_tokens_user_id` on `user_id`, `UQ_social_link_confirm_tokens_token_hash` (unique) on `token_hash`. **Soft delete:** none — rows are consumed in place (`consumed_at`), never deleted.
+
 ### `notifications` — `src/modules/notification/entities/notification.entity.ts`
 `id`, `user_id` (indexed, no FK), `event_id` (**unique** — the idempotency key), `type` (varchar(32)), `title` (varchar(200)), `body` (varchar(500)), `data` (`simple-json`, nullable — `{ taskId?, commentId?, invitedEmail? }`), `is_read` (indexed, default false), `read_at`, `created_at`/`updated_at`.
 
@@ -327,7 +355,7 @@ The `teamId: null` = personal, `teamId: <uuid>` = team-scoped pattern is impleme
 Confirmed by reading `TypeOrmTeamRepository.create()` directly (not just the entity comment): a team row and its owner's `team_members` row (with `role = OWNER`) are created together inside a single database transaction. This is why `teams.owner_id` can safely be a denormalized, unconstrained column — the actual authorization-relevant fact ("is this user the owner") is always independently derivable from `team_members`, and the transaction guarantees the two can never disagree at the moment of creation. (They *could* theoretically drift later if `team_members.role` for the owner is ever changed without updating `teams.owner_id` — I did not find any code path that does this, but it's worth knowing this is an invariant maintained by *convention plus one transactional insert*, not by an ongoing database constraint.)
 
 ### The "no FK on `user_id`" convention
-This is the single most consistent structural pattern in the schema — verified by checking **every** `user_id`-named column in the migrations: `tasks`, `categories`, `tags`, `team_members`, `comments`, `invitations.invited_by`/`invited_user_id`, `files`, `refresh_tokens`, `password_reset_tokens`, `email_verification_tokens`, `notifications`, `activity_logs`, `user_devices`, `user_settings`, and `teams.owner_id` — **none** of these have a foreign-key constraint to `users.id`. `UserEntity`'s own comment states the rationale for one specific case (`avatarFileId`): *"a plain column so the File module never needs to import the User entity cyclically."* The same avoid-cyclic-import, keep-tenant-checks-as-plain-column-reads rationale is echoed on `CommentEntity`. This reads as a deliberate, project-wide convention, not an oversight repeated by accident — and it is now applied **without exception**. `files.user_id` was the last table with an FK to `users`; the `DatabaseFindingsFixes` migration removed it (keeping the column and index), so no table in the schema references `users.id` via a foreign key anymore. (See Section 10 for the "no cleanup path on user deletion" flip side of this same decision.)
+This is the single most consistent structural pattern in the schema — verified by checking **every** `user_id`-named column in the migrations: `tasks`, `categories`, `tags`, `team_members`, `comments`, `invitations.invited_by`/`invited_user_id`, `files`, `refresh_tokens`, `password_reset_tokens`, `email_verification_tokens`, `social_link_confirm_tokens`, `notifications`, `activity_logs`, `user_devices`, `user_settings`, and `teams.owner_id` — **none** of these have a foreign-key constraint to `users.id`. `UserEntity`'s own comment states the rationale for one specific case (`avatarFileId`): *"a plain column so the File module never needs to import the User entity cyclically."* The same avoid-cyclic-import, keep-tenant-checks-as-plain-column-reads rationale is echoed on `CommentEntity`. This reads as a deliberate, project-wide convention, not an oversight repeated by accident — and it is now applied **without exception**. `files.user_id` was the last table with an FK to `users`; the `DatabaseFindingsFixes` migration removed it (keeping the column and index), so no table in the schema references `users.id` via a foreign key anymore. (See Section 10 for the "no cleanup path on user deletion" flip side of this same decision.)
 
 ---
 
@@ -366,9 +394,11 @@ Currently `FileKind` has exactly one value (`AVATAR`) — the table's structure 
 
 ## 8. Migration History Summary
 
-There are currently **two migrations**:
-1. `1785801600000-BaselineSchema.ts` (dated in its own comment as "as of 2026-08-03"). It creates all seventeen tables described in Section 3 in a single `up()`, using TypeORM's driver-agnostic `Table`/`TableForeignKey`/`TableIndex` API specifically so the identical migration code produces correct DDL on both Postgres and sqlite (confirmed by the `const postgres = queryRunner.connection.driver.options.type === 'postgres'` branch, used only for the `uuid_generate_v4()` PK default — everything else in the migration is driver-neutral). Its `down()` drops all seventeen tables in reverse dependency order. `baseline.spec.ts` verifies the full chain (baseline + findings) produces the schema the entities expect: every table exists, all insert/select round-trips work, and team deletion cascades through tasks and members.
+There are currently **four migrations**:
+1. `1785801600000-BaselineSchema.ts` (dated in its own comment as "as of 2026-08-03"). It creates the seventeen tables of the original schema — everything in Section 3 except `social_link_confirm_tokens` — in a single `up()`, using TypeORM's driver-agnostic `Table`/`TableForeignKey`/`TableIndex` API specifically so the identical migration code produces correct DDL on both Postgres and sqlite (confirmed by the `const postgres = queryRunner.connection.driver.options.type === 'postgres'` branch, used only for the `uuid_generate_v4()` PK default — everything else in the migration is driver-neutral). Its `down()` drops all seventeen tables in reverse dependency order. `baseline.spec.ts` verifies the full chain (baseline + findings) produces the schema the entities expect: every table exists, all insert/select round-trips work, and team deletion cascades through tasks and members.
 2. `1786147200000-DatabaseFindingsFixes.ts` (2026-08-08). Implements the four accepted fixes from this document's Findings section, each as a clearly separated, independently reversible block: (a) drops the `files.user_id` FK to `users`, keeping the column and its index intact; (b) adds `IDX_refresh_tokens_family_id`; (c) renames `users.firstName`/`lastName` → `first_name`/`last_name`; (d) adds the partial unique index `UQ_invitations_team_email_pending` (`WHERE status = 'pending'`). Its `down()` reverses all four in reverse order, restoring the baseline state (including the `files` FK with `ON DELETE CASCADE`). Verified on sqlite: `up()` → `down()` → `up()` round-trips cleanly (both via the CLI and via `findings.spec.ts`'s `undoLastMigration()`/re-`up()` cycle).
+3. `1786400000000-AuthProviderColumn.ts` (2026-08-11, shipped with the social-login round). Adds `users.auth_provider` — varchar(20), NOT NULL DEFAULT `'password'` — the creation-time marker recording which sign-in method created the account. Values are constrained by the application `AuthProvider` enum, not a DB check constraint, matching how `role` is handled. Its `down()` drops the column.
+4. `1786492800000-FacebookSocialLink.ts` (2026-08-12, Facebook Round 1c / Decision 4). (a) Adds `users.facebook_account_id` (nullable varchar(255)); (b) creates `social_link_confirm_tokens` with `IDX_social_link_confirm_tokens_user_id` and the unique `UQ_social_link_confirm_tokens_token_hash`. Its `down()` drops the table then the column.
 
 ---
 
@@ -376,10 +406,10 @@ There are currently **two migrations**:
 
 Observed directly from the entities and the migrations (not prescribed):
 - **Tables:** plural, snake_case (`users`, `team_members`, `activity_logs`, `task_tags`).
-- **Columns:** snake_case, **fully consistent across all seventeen tables** — the former `users.firstName`/`users.lastName` camelCase exception was renamed to `first_name`/`last_name` by the `DatabaseFindingsFixes` migration, with the entity keeping its `firstName`/`lastName` TypeScript property names via explicit `@Column({ name: ... })` overrides so application code outside the entity was unaffected.
+- **Columns:** snake_case, **fully consistent across all eighteen tables** — the former `users.firstName`/`users.lastName` camelCase exception was renamed to `first_name`/`last_name` by the `DatabaseFindingsFixes` migration, with the entity keeping its `firstName`/`lastName` TypeScript property names via explicit `@Column({ name: ... })` overrides so application code outside the entity was unaffected.
 - **Primary keys:** always `id`, always `uuid`.
 - **Foreign key columns:** `<referenced_singular>_id` (`team_id`, `task_id`, `category_id`, `user_id`), consistently snake_case even when unconstrained.
-- **Indexes:** explicit names follow `IDX_<table>_<column(s)>` for non-unique and `UQ_<table>_<column(s)>` for unique, applied with total consistency across all seventeen tables in the baseline migration and the new indexes added since (`IDX_refresh_tokens_family_id`, `UQ_invitations_team_email_pending`) — this is the one convention with zero exceptions found.
+- **Indexes:** explicit names follow `IDX_<table>_<column(s)>` for non-unique and `UQ_<table>_<column(s)>` for unique, applied with total consistency across all seventeen tables in the baseline migration and the indexes added since (`IDX_refresh_tokens_family_id`, `UQ_invitations_team_email_pending`, `IDX_social_link_confirm_tokens_user_id`, `UQ_social_link_confirm_tokens_token_hash`) — this is the one convention with zero exceptions found.
 - **Booleans:** `is_<adjective>` (`is_done`, `is_revoked`, `is_read`, `is_email_verified`) — fully consistent.
 - **Timestamps:** `created_at`/`updated_at` on every table that has them, `<verb>_at` for point-in-time events (`completed_at`, `revoked_at`, `consumed_at`, `read_at`, `accepted_at`, `declined_at`, `expires_at`, `email_verified_at`, `last_login_at`) — fully consistent.
 
