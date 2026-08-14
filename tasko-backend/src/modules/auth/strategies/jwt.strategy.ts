@@ -4,7 +4,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { AuthenticatedUser } from '../../../common/types/authenticated-user';
 
-interface AccessTokenPayload {
+export interface AccessTokenPayload {
   sub: string;
   email: string;
   role: string;

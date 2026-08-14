@@ -14,6 +14,7 @@ import { AppModule } from '../../src/app.module';
 import { FirebaseAdminService } from '../../src/infrastructure/firebase/firebase-admin.service';
 import { LogMailerService } from '../../src/infrastructure/mailer/log-mailer.service';
 import { MailerService } from '../../src/infrastructure/mailer/mailer.service';
+import { PushDispatcher } from '../../src/infrastructure/push/push-dispatcher.service';
 
 /** Matches the raw one-time token embedded in a magic-link / verification URL. */
 export const TOKEN_IN_HTML = /token=([A-Za-z0-9_-]+)/;
@@ -33,6 +34,12 @@ export interface BootstrapOptions {
    * whose `verifyIdToken` resolves to a forged DecodedIdToken.
    */
   firebaseAdmin?: Partial<FirebaseAdminService>;
+  /**
+   * Replaces PushDispatcher with a spy so specs can assert whether (and to
+   * which devices) a push was dispatched — required by the realtime spec's
+   * FCM-suppression scenario (plan Section 12.2).
+   */
+  pushDispatcher?: Partial<PushDispatcher>;
 }
 
 /** Boots the full AppModule against an isolated in-memory sqlite database. */
@@ -47,6 +54,9 @@ export async function bootstrapApp(
     builder
       .overrideProvider(FirebaseAdminService)
       .useValue(options.firebaseAdmin);
+  }
+  if (options.pushDispatcher) {
+    builder.overrideProvider(PushDispatcher).useValue(options.pushDispatcher);
   }
 
   const moduleRef = await builder.compile();

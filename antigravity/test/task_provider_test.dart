@@ -4,6 +4,7 @@ import 'package:tasko/features/todo/domain/entities/task.dart';
 import 'package:tasko/features/todo/presentation/state/task_provider.dart';
 import 'package:tasko/shared/services/analytics_service.dart';
 import 'package:tasko/shared/services/performance_service.dart';
+import 'package:tasko/shared/services/realtime_service.dart';
 
 import 'core/network/test_services.dart';
 
@@ -430,6 +431,118 @@ void main() {
       await provider.loadTasks();
 
       expect(provider.completedCount, 1);
+    });
+  });
+
+  group('applyRealtimeEvent', () {
+    RealtimeEnvelope env(String event, Map<String, dynamic> payload) =>
+        RealtimeEnvelope(
+          eventName: event,
+          eventId: 'evt',
+          occurredAt: '2026-01-01T00:00:00.000Z',
+          actorUserId: 'u-1',
+          payload: payload,
+        );
+
+    test('task.created adds the task to the list', () async {
+      final fake = FakeTaskBackend();
+      final provider = TaskProvider(services: fake.backend.services);
+      await provider.loadTasks();
+      expect(provider.tasks, isEmpty);
+
+      provider.applyRealtimeEvent(
+          env('task.created', taskJson(id: 'a', title: 'Alpha')));
+
+      expect(provider.tasks.single.id, 'a');
+      expect(provider.tasks.single.title, 'Alpha');
+    });
+
+    test('task.updated replaces the existing task in place', () async {
+      final fake = FakeTaskBackend()
+        ..serverTasks.add(taskJson(id: 'a', title: 'Alpha'));
+      final provider = TaskProvider(services: fake.backend.services);
+      await provider.loadTasks();
+
+      provider.applyRealtimeEvent(env('task.updated', taskJson(
+        id: 'a',
+        title: 'Alpha v2',
+        isDone: true,
+      )));
+
+      expect(provider.tasks.length, 1);
+      expect(provider.tasks.single.title, 'Alpha v2');
+      expect(provider.tasks.single.isDone, isTrue);
+    });
+
+    test('task.completed marks the task done', () async {
+      final fake = FakeTaskBackend()
+        ..serverTasks.add(taskJson(id: 'a', title: 'Alpha'));
+      final provider = TaskProvider(services: fake.backend.services);
+      await provider.loadTasks();
+
+      provider.applyRealtimeEvent(env('task.completed', taskJson(
+        id: 'a',
+        title: 'Alpha',
+        isDone: true,
+      )));
+
+      expect(provider.tasks.single.isDone, isTrue);
+    });
+
+    test('task.deleted removes the task by taskId', () async {
+      final fake = FakeTaskBackend()
+        ..serverTasks.add(taskJson(id: 'a', title: 'Alpha'))
+        ..serverTasks.add(taskJson(id: 'b', title: 'Beta'));
+      final provider = TaskProvider(services: fake.backend.services);
+      await provider.loadTasks();
+
+      provider.applyRealtimeEvent(env('task.deleted', {
+        'taskId': 'a',
+        'title': 'Alpha',
+      }));
+
+      expect(provider.tasks.map((t) => t.id), ['b']);
+    });
+
+    test('task.deleted for an unknown id is a no-op', () async {
+      final fake = FakeTaskBackend()
+        ..serverTasks.add(taskJson(id: 'a', title: 'Alpha'));
+      final provider = TaskProvider(services: fake.backend.services);
+      await provider.loadTasks();
+
+      provider.applyRealtimeEvent(env('task.deleted', {
+        'taskId': 'nope',
+        'title': 'Nope',
+      }));
+
+      expect(provider.tasks.length, 1);
+    });
+
+    test('idempotent echo keeps a single instance', () async {
+      final fake = FakeTaskBackend();
+      final provider = TaskProvider(services: fake.backend.services);
+      await provider.loadTasks();
+
+      provider.applyRealtimeEvent(
+          env('task.created', taskJson(id: 'a', title: 'Alpha')));
+      provider.applyRealtimeEvent(
+          env('task.created', taskJson(id: 'a', title: 'Alpha')));
+
+      expect(provider.tasks.length, 1);
+    });
+
+    test('a malformed upsert payload is dropped, never thrown', () async {
+      final fake = FakeTaskBackend()
+        ..serverTasks.add(taskJson(id: 'a', title: 'Alpha'));
+      final provider = TaskProvider(services: fake.backend.services);
+      await provider.loadTasks();
+
+      provider.applyRealtimeEvent(env('task.updated', {
+        'id': 'a',
+      }));
+
+      expect(provider.tasks.single.title, 'Alpha');
+      expect(provider.tasks.length, 1);
     });
   });
 }

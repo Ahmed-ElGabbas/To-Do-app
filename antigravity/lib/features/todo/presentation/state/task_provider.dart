@@ -6,6 +6,7 @@ import 'package:tasko/features/todo/domain/entities/task.dart';
 import 'package:tasko/shared/services/notification_service.dart';
 import 'package:tasko/shared/services/performance_service.dart';
 import 'package:tasko/shared/services/analytics_service.dart';
+import 'package:tasko/shared/services/realtime_service.dart';
 
 /// ChangeNotifier for task management backed by the Tasko backend.
 ///
@@ -199,6 +200,48 @@ class TaskProvider extends ChangeNotifier {
       _errorMessage = e.message;
       notifyListeners();
     }
+  }
+
+  // ── Realtime (R7) ──────────────────────────────────────────────────────────
+
+  /// Applies a server `task.*` event (Section 3.3). `task.created` /
+  /// `task.updated` / `task.completed` / `task.reopened` carry a `TaskOutput`
+  /// payload and upsert by id; `task.deleted` carries `{ taskId, title,
+  /// teamId? }` and removes. Idempotent by construction, so the echo of this
+  /// device's own REST write is a no-op in effect.
+  void applyRealtimeEvent(RealtimeEnvelope envelope) {
+    switch (envelope.eventName) {
+      case 'task.created':
+      case 'task.updated':
+      case 'task.completed':
+      case 'task.reopened':
+        _applyRealtimeUpsert(envelope.payload);
+      case 'task.deleted':
+        _applyRealtimeDelete(envelope.payload);
+    }
+  }
+
+  void _applyRealtimeUpsert(Map<String, dynamic> payload) {
+    try {
+      final task = TaskModel.fromJson(payload);
+      final index = _tasks.indexWhere((t) => t.id == task.id);
+      if (index == -1) {
+        _tasks.add(task);
+      } else {
+        _tasks[index] = task;
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('TaskProvider: dropped malformed realtime task event: $e');
+    }
+  }
+
+  void _applyRealtimeDelete(Map<String, dynamic> payload) {
+    final taskId = payload['taskId'];
+    if (taskId is! String) return;
+    final lengthBefore = _tasks.length;
+    _tasks.removeWhere((t) => t.id == taskId);
+    if (_tasks.length != lengthBefore) notifyListeners();
   }
 
   // ── Clear all ─────────────────────────────────────────────────────────────

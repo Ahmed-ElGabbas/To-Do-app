@@ -25,6 +25,7 @@ import 'package:tasko/shared/services/deep_link_service.dart';
 import 'package:tasko/shared/services/notification_service.dart';
 import 'package:tasko/shared/services/performance_service.dart';
 import 'package:tasko/shared/services/push_service.dart';
+import 'package:tasko/shared/services/realtime_service.dart';
 import 'package:tasko/shared/services/remote_config_service.dart';
 
 void main() async {
@@ -92,6 +93,40 @@ void main() async {
   final taskProvider = TaskProvider()..loadTasks();
   final authProvider = AuthProvider()..loadUser();
   final notificationProvider = NotificationProvider();
+  final teamProvider = TeamProvider();
+
+  // Realtime (R6): one socket per app. The auth layer connects on login and
+  // disconnects on logout; a reconnect re-fetches current state over REST
+  // exactly like the FCM foreground handler (realtime plan Section 8). When a
+  // handshake is rejected and the token refresh fails, the session is expired
+  // and the user is signed out.
+  final realtime = RealtimeService();
+  RealtimeService.instance = realtime;
+  realtime.onSessionExpired = () {
+    unawaited(authProvider.logout());
+  };
+  realtime.onReconnected = () {
+    if (!authProvider.isLoggedIn) return;
+    taskProvider.loadTasks();
+    teamProvider.loadTeams();
+    notificationProvider.load();
+  };
+
+  // Realtime (R7): central dispatcher. Coarse handlers update the global
+  // providers exactly like the FCM foreground closure; screen-scoped
+  // subscriptions (live comments, typing, roster) register directly in
+  // their initState per Section 10.2.
+  realtime.onTaskEvent = taskProvider.applyRealtimeEvent;
+  realtime.onPresence = teamProvider.applyPresence;
+  realtime.onMemberRemoved = (_) {
+    if (!authProvider.isLoggedIn) return;
+    teamProvider.loadTeams();
+  };
+  realtime.onInvitationAccepted = (_) {
+    if (!authProvider.isLoggedIn) return;
+    teamProvider.loadTeams();
+    notificationProvider.load();
+  };
 
   // FCM: register handlers + device token, and keep the in-app feed in sync
   // when a push arrives while the app is foregrounded.
@@ -116,7 +151,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => taskProvider),
         ChangeNotifierProvider(create: (_) => authProvider),
         ChangeNotifierProvider(create: (_) => SettingsProvider()..loadSettings()),
-        ChangeNotifierProvider(create: (_) => TeamProvider()),
+        ChangeNotifierProvider(create: (_) => teamProvider),
         ChangeNotifierProvider(create: (_) => notificationProvider),
         ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
         ChangeNotifierProvider(create: (_) => ActivityProvider()),

@@ -139,6 +139,7 @@ describe('CommentService', () => {
           type: TaskEventType.COMMENT_ADDED,
           userId: OWNER,
           taskId: TASK_ID,
+          teamId: TEAM_ID,
           data: expect.objectContaining({ commentId: COMMENT_ID }),
         }),
       );

@@ -19,5 +19,6 @@ import { CommentService } from './services/comment.service';
     CommentService,
     { provide: CommentRepository, useClass: TypeOrmCommentRepository },
   ],
+  exports: [CommentRepository],
 })
 export class CommentModule {}

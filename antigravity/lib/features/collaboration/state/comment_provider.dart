@@ -3,6 +3,7 @@ import 'package:tasko/core/network/api_error.dart';
 import 'package:tasko/core/network/app_services.dart';
 import 'package:tasko/core/network/models/comment.dart';
 import 'package:tasko/shared/services/analytics_service.dart';
+import 'package:tasko/shared/services/realtime_service.dart';
 
 /// Comments on a single task. Mirrors the mutation pattern used by the other
 /// collaboration providers: expose the API, keep loading/error state, and
@@ -14,18 +15,23 @@ class CommentProvider extends ChangeNotifier {
   final AppServices _services;
 
   List<Comment> _comments = [];
+  String? _taskId;
   bool _isLoading = false;
   bool _isLoaded = false;
   bool _isSubmitting = false;
   String? _errorMessage;
 
   List<Comment> get comments => _comments;
+
+  /// The task this provider is scoped to (set by [load]); null before load.
+  String? get taskId => _taskId;
   bool get isLoading => _isLoading;
   bool get isLoaded => _isLoaded;
   bool get isSubmitting => _isSubmitting;
   String? get errorMessage => _errorMessage;
 
   Future<void> load(String taskId) async {
+    _taskId = taskId;
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -90,5 +96,28 @@ class CommentProvider extends ChangeNotifier {
       _errorMessage = e.message;
       return false;
     }
+  }
+
+  // ── Realtime (R7) ──────────────────────────────────────────────────────────
+
+  /// Appends a live `comment.added` event (Section 3.3). The envelope payload
+  /// is `{ comment, task }`; comments for another task are ignored, and a
+  /// duplicate id (the echo of this device's own REST post) is dropped.
+  /// Insertion keeps the list sorted by [Comment.createdAt].
+  void applyRealtimeComment(RealtimeEnvelope envelope) {
+    final commentData = envelope.payload['comment'];
+    if (commentData is! Map<String, dynamic>) return;
+    if (_taskId == null) return;
+    final comment = Comment.fromJson(commentData);
+    if (comment.taskId != _taskId) return;
+    if (_comments.any((c) => c.id == comment.id)) return;
+    final index =
+        _comments.indexWhere((c) => c.createdAt.isAfter(comment.createdAt));
+    if (index == -1) {
+      _comments.add(comment);
+    } else {
+      _comments.insert(index, comment);
+    }
+    notifyListeners();
   }
 }

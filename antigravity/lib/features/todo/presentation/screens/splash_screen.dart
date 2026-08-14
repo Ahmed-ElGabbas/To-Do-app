@@ -8,6 +8,7 @@ import 'package:tasko/shared/services/deep_link_service.dart';
 import 'package:tasko/features/todo/presentation/widgets/main_scaffold.dart';
 import 'package:tasko/features/auth/presentation/screens/login_screen.dart';
 import 'package:tasko/shared/services/push_service.dart';
+import 'package:tasko/shared/services/realtime_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -63,6 +64,12 @@ class _SplashScreenState extends State<SplashScreen>
       // once the main scaffold is on screen.
       if (isLoggedIn) {
         PushService.instance?.flushPendingRoute();
+      }
+
+      // Realtime (R6): ensure the socket is open once the session is restored.
+      // The auth layer already connects on login; this is an idempotent guard.
+      if (isLoggedIn) {
+        RealtimeService.instance?.connect();
       }
 
       // Cold start via a magic-link tap (Round 4): the accept screen is public

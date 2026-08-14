@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { LoggerService } from './common/logger/logger.service';
+import { RedisIoAdapter } from './infrastructure/realtime/redis-io.adapter';
 import { setupSwagger } from './infrastructure/swagger/setup-swagger';
 
 const PLACEHOLDER_JWT_SECRET =
@@ -43,6 +44,14 @@ async function bootstrap() {
   });
 
   setupSwagger(app);
+
+  // Redis-backed Socket.IO adapter (cross-instance room broadcasts) only when
+  // REDIS_URL is set; without it the gateway falls back to the default
+  // in-process IoAdapter, which is correct for local dev and tests.
+  const redisUrl = config.get<string>('redis.url', '');
+  if (redisUrl) {
+    app.useWebSocketAdapter(new RedisIoAdapter(app, redisUrl));
+  }
 
   const port = config.get<number>('app.port', 3000);
   await app.listen(port);

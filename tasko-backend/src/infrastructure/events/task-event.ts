@@ -15,6 +15,10 @@ export enum TaskEventType {
   // (there is no assigneeId concept anywhere); the name predates teams.
   TASK_ASSIGNED = 'task.assigned',
   USER_ROLE_CHANGED = 'user.role.changed',
+  // Emitted when a user is removed from a team. Routes to the team room so the
+  // realtime layer can force-leave the removed user's sockets and refresh the
+  // remaining members' rosters. Deliberately produces no notification.
+  MEMBER_REMOVED = 'member.removed',
 }
 
 export interface TaskEventData {
@@ -44,6 +48,12 @@ export interface TaskEvent {
   userId: string;
   /** Set for events tied to a task; absent for team-level events. */
   taskId?: string;
+  /**
+   * Team scope of the event, when known. Additive (existing consumers ignore
+   * it); lets realtime route an event to the right `team:<id>` room — the
+   * only viable key for TASK_DELETED, whose row is gone at consumption time.
+   */
+  teamId?: string;
   /** ISO-8601 timestamp when the event occurred. */
   occurredAt: string;
   data: TaskEventData;

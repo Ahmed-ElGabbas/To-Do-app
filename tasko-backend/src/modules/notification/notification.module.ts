@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { LoggerModule } from '../../common/logger/logger.module';
 import { TaskEventsModule } from '../../infrastructure/events/task-events.module';
 import { PushModule } from '../../infrastructure/push/push.module';
+import { RealtimeModule } from '../realtime/realtime.module';
 import { NotificationController } from './controllers/notification.controller';
 import { NotificationEntity } from './entities/notification.entity';
 import { UserDeviceEntity } from './entities/user-device.entity';
@@ -19,6 +20,7 @@ import { NotificationService } from './services/notification.service';
     TypeOrmModule.forFeature([NotificationEntity, UserDeviceEntity]),
     TaskEventsModule,
     forwardRef(() => PushModule),
+    RealtimeModule,
   ],
   controllers: [NotificationController],
   providers: [

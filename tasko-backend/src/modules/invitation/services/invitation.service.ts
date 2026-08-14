@@ -161,6 +161,7 @@ export class InvitationService {
       id: randomUUID(),
       type: TaskEventType.INVITATION_ACCEPTED,
       userId: invitation.invitedBy,
+      teamId: invitation.teamId,
       occurredAt: new Date().toISOString(),
       data: { invitedEmail: invitation.email },
     });

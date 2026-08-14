@@ -9,6 +9,7 @@ import 'package:tasko/core/network/models/team.dart';
 import 'package:tasko/core/theme/text_styles.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
 import 'package:tasko/features/collaboration/state/team_provider.dart';
+import 'package:tasko/shared/services/realtime_service.dart';
 
 class TeamDetailsScreen extends StatefulWidget {
   final String teamId;
@@ -23,11 +24,22 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> {
   List<TeamMember> _members = [];
   List<Invitation> _invitations = [];
   bool _isLoading = true;
+  VoidCallback? _memberRemovedUnsub;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // R7: keep the roster live when a teammate is removed (Section 10.2).
+    _memberRemovedUnsub = RealtimeService.instance?.subscribeMemberRemoved((e) {
+      if (e.payload['teamId'] == widget.teamId) _load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _memberRemovedUnsub?.call();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -176,19 +188,47 @@ class _TeamDetailsScreenState extends State<TeamDetailsScreen> {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: theme.primaryColor.withValues(alpha: 0.1),
-            child: Text(
-              member.user.displayName.isNotEmpty
-                  ? member.user.displayName[0].toUpperCase()
-                  : '?',
-              style: GoogleFonts.poppins(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: theme.primaryColor,
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: theme.primaryColor.withValues(alpha: 0.1),
+                child: Text(
+                  member.user.displayName.isNotEmpty
+                      ? member.user.displayName[0].toUpperCase()
+                      : '?',
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: theme.primaryColor,
+                  ),
+                ),
               ),
-            ),
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Semantics(
+                  label: provider.isOnline(member.userId)
+                      ? l10n.get('online')
+                      : l10n.get('offline'),
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: provider.isOnline(member.userId)
+                          ? Colors.green
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.25),
+                      border: Border.all(
+                        color: theme.colorScheme.surface,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: AppSizes.md),
           Expanded(

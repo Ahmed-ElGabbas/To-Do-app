@@ -8,6 +8,7 @@ import 'package:tasko/shared/services/analytics_service.dart';
 import 'package:tasko/shared/services/crashlytics_service.dart';
 import 'package:tasko/shared/services/performance_service.dart';
 import 'package:tasko/shared/services/push_service.dart';
+import 'package:tasko/shared/services/realtime_service.dart';
 
 /// Authenticates against the Tasko backend with JWT access/refresh tokens.
 ///
@@ -99,6 +100,7 @@ class AuthProvider extends ChangeNotifier {
       _errorMessage = null;
       _syncCrashContext();
       await _syncPushToken();
+      await _syncRealtime();
     } on ApiException {
       _isLoggedIn = false;
       _user = null;
@@ -262,6 +264,7 @@ class AuthProvider extends ChangeNotifier {
     _pendingSocialLink = null;
     _syncCrashContext();
     await _revokePushToken();
+    RealtimeService.instance?.disconnect();
     await _services.tokenStore.clear();
     notifyListeners();
     if (refreshToken != null && refreshToken.isNotEmpty) {
@@ -407,6 +410,7 @@ class AuthProvider extends ChangeNotifier {
     );
     _syncCrashContext();
     await _syncPushToken();
+    await _syncRealtime();
   }
 
   /// Attaches the signed-in user's UUID (never the email) to crash reports, or
@@ -421,6 +425,14 @@ class AuthProvider extends ChangeNotifier {
     final push = PushService.instance;
     if (push == null) return;
     await push.syncCurrentToken();
+  }
+
+  /// Opens the realtime socket once a session exists. No-op when realtime is
+  /// not initialized (widget tests); never fails the auth flow.
+  Future<void> _syncRealtime() async {
+    final realtime = RealtimeService.instance;
+    if (realtime == null) return;
+    await realtime.connect();
   }
 
   /// Best-effort revokes the FCM device token so a logged-out app no longer

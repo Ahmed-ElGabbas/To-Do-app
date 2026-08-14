@@ -370,6 +370,15 @@ describe('TaskService', () => {
           type: TaskEventType.TASK_ASSIGNED,
           userId: OTHER,
           taskId: teamTask.id,
+          teamId: TEAM,
+        }),
+      );
+      expect(eventBus.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: TaskEventType.TASK_CREATED,
+          userId: OWNER,
+          taskId: teamTask.id,
+          teamId: TEAM,
         }),
       );
       expect(eventBus.publish).not.toHaveBeenCalledWith(

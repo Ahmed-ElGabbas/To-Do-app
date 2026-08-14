@@ -257,6 +257,7 @@ describe('InvitationService', () => {
         expect.objectContaining({
           type: TaskEventType.INVITATION_ACCEPTED,
           userId: INVITER,
+          teamId: TEAM_ID,
           data: { invitedEmail: EMAIL },
         }),
       );

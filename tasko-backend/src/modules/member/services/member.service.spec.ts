@@ -1,5 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { TeamRole } from '../../../common/constants/team-role.enum';
+import { TaskEventType } from '../../../infrastructure/events/task-event';
+import { TaskEventBus } from '../../../infrastructure/events/task-event-bus.service';
 import { TeamRepository } from '../../team/interfaces/team-repository';
 import { UserService } from '../../user/user.service';
 import { MemberRepository } from '../interfaces/member-repository';
@@ -22,6 +24,7 @@ describe('MemberService', () => {
     findById: jest.fn(),
     findByEmail: jest.fn(),
   };
+  const eventBus = { publish: jest.fn() };
 
   let service: MemberService;
 
@@ -33,6 +36,7 @@ describe('MemberService', () => {
         { provide: MemberRepository, useValue: members },
         { provide: TeamRepository, useValue: teams },
         { provide: UserService, useValue: users },
+        { provide: TaskEventBus, useValue: eventBus },
       ],
     }).compile();
     service = moduleRef.get(MemberService);
@@ -145,11 +149,19 @@ describe('MemberService', () => {
   });
 
   describe('removeMember', () => {
-    it('removes a non-owner member', async () => {
+    it('removes a non-owner member and publishes MEMBER_REMOVED', async () => {
       members.findByTeamAndUser.mockResolvedValue(membership);
       teams.findById.mockResolvedValue({ id: TEAM_ID, ownerId: OWNER });
       await service.removeMember(TEAM_ID, MEMBER);
       expect(members.remove).toHaveBeenCalledWith(membership.id);
+      expect(eventBus.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: TaskEventType.MEMBER_REMOVED,
+          userId: MEMBER,
+          teamId: TEAM_ID,
+          data: {},
+        }),
+      );
     });
 
     it('rejects removing the team owner', async () => {
@@ -164,6 +176,7 @@ describe('MemberService', () => {
         code: 'FORBIDDEN',
       });
       expect(members.remove).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
     });
   });
 });

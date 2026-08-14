@@ -1,10 +1,16 @@
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import {
   ConflictError,
   ForbiddenActionError,
   ResourceNotFoundError,
 } from '../../../common/errors/domain-error';
 import { TeamRole } from '../../../common/constants/team-role.enum';
+import {
+  TaskEvent,
+  TaskEventType,
+} from '../../../infrastructure/events/task-event';
+import { TaskEventBus } from '../../../infrastructure/events/task-event-bus.service';
 import { TeamRepository } from '../../team/interfaces/team-repository';
 import { UserService } from '../../user/user.service';
 import { TeamMemberEntity } from '../entities/team-member.entity';
@@ -19,6 +25,7 @@ export class MemberService {
     private readonly members: MemberRepository,
     private readonly teams: TeamRepository,
     private readonly users: UserService,
+    private readonly eventBus: TaskEventBus,
   ) {}
 
   async list(teamId: string): Promise<MemberOutput[]> {
@@ -68,6 +75,22 @@ export class MemberService {
       throw new ForbiddenActionError('The team owner cannot be removed');
     }
     await this.members.remove(member.id);
+    await this.publishMemberRemoved(teamId, member.userId);
+  }
+
+  private async publishMemberRemoved(
+    teamId: string,
+    removedUserId: string,
+  ): Promise<void> {
+    const event: TaskEvent = {
+      id: randomUUID(),
+      type: TaskEventType.MEMBER_REMOVED,
+      userId: removedUserId,
+      teamId,
+      occurredAt: new Date().toISOString(),
+      data: {},
+    };
+    await this.eventBus.publish(event);
   }
 
   private async getMembership(

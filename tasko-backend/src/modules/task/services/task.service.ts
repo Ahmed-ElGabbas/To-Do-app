@@ -138,7 +138,12 @@ export class TaskService {
       tags: tagEntities,
       completedAt: dto.isDone ? new Date() : null,
     });
-    await this.emit(TaskEventType.TASK_CREATED, scope.userId, task);
+    await this.emit(
+      TaskEventType.TASK_CREATED,
+      scope.userId,
+      task,
+      scope.teamId ?? undefined,
+    );
     if (scope.teamId) {
       await this.emitAssigned(scope.teamId, scope.userId, task);
     }
@@ -183,7 +188,12 @@ export class TaskService {
     }
 
     const saved = await this.tasks.save(task);
-    await this.emit(TaskEventType.TASK_UPDATED, scope.userId, saved);
+    await this.emit(
+      TaskEventType.TASK_UPDATED,
+      scope.userId,
+      saved,
+      scope.teamId ?? undefined,
+    );
     return toTaskOutput(saved);
   }
 
@@ -199,13 +209,19 @@ export class TaskService {
       isDone ? TaskEventType.TASK_COMPLETED : TaskEventType.TASK_REOPENED,
       scope.userId,
       saved,
+      scope.teamId ?? undefined,
     );
     return toTaskOutput(saved);
   }
 
   private async removeTask(scope: TaskScope, task: TaskEntity): Promise<void> {
     await this.tasks.remove(task.id);
-    await this.emit(TaskEventType.TASK_DELETED, scope.userId, task);
+    await this.emit(
+      TaskEventType.TASK_DELETED,
+      scope.userId,
+      task,
+      scope.teamId ?? undefined,
+    );
   }
 
   /** Publishes a task domain event for downstream consumers. */
@@ -213,11 +229,13 @@ export class TaskService {
     type: TaskEventType,
     userId: string,
     task: Pick<TaskEntity, 'id' | 'title'>,
+    teamId?: string,
   ): Promise<void> {
     const event: TaskEvent = {
       id: randomUUID(),
       type,
       userId,
+      teamId,
       taskId: task.id,
       occurredAt: new Date().toISOString(),
       data: { title: task.title },
@@ -239,7 +257,7 @@ export class TaskService {
       .map((row) => row.userId)
       .filter((userId) => userId !== creatorId);
     for (const recipient of recipients) {
-      await this.emit(TaskEventType.TASK_ASSIGNED, recipient, task);
+      await this.emit(TaskEventType.TASK_ASSIGNED, recipient, task, teamId);
     }
   }
 

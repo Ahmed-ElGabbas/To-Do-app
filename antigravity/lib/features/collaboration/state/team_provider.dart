@@ -6,6 +6,7 @@ import 'package:tasko/core/network/models/member.dart';
 import 'package:tasko/core/network/models/team.dart';
 import 'package:tasko/shared/services/analytics_service.dart';
 import 'package:tasko/shared/services/crashlytics_service.dart';
+import 'package:tasko/shared/services/realtime_service.dart';
 
 /// Teams the current user belongs to, plus the active-team selection that
 /// scopes team-level features (members, invitations, analytics).
@@ -17,6 +18,7 @@ class TeamProvider extends ChangeNotifier {
 
   List<TeamWithRole> _teams = [];
   TeamWithRole? _activeTeam;
+  final Set<String> _onlineUserIds = {};
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -26,6 +28,25 @@ class TeamProvider extends ChangeNotifier {
   bool get hasTeams => _teams.isNotEmpty;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+
+  // ── Presence (R7) ──────────────────────────────────────────────────────────
+
+  /// Members of the user's teams who are currently online, keyed by userId.
+  Set<String> get onlineUserIds => Set.unmodifiable(_onlineUserIds);
+
+  /// Whether a team member is currently online (presence dot, Section 10.3).
+  bool isOnline(String userId) => _onlineUserIds.contains(userId);
+
+  /// Applies a `user.online` / `user.offline` envelope (payload `{ userId }`).
+  /// No-op when the membership set is unchanged.
+  void applyPresence(RealtimeEnvelope envelope) {
+    final userId = envelope.payload['userId'];
+    if (userId is! String) return;
+    final changed = envelope.eventName == 'user.online'
+        ? _onlineUserIds.add(userId)
+        : _onlineUserIds.remove(userId);
+    if (changed) notifyListeners();
+  }
 
   // ── Team CRUD ─────────────────────────────────────────────────────────────
 

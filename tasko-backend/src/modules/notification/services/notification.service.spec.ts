@@ -7,6 +7,7 @@ import {
 } from '../../../infrastructure/events/task-event';
 import { TaskEventBus } from '../../../infrastructure/events/task-event-bus.service';
 import { PushDispatcher } from '../../../infrastructure/push/push-dispatcher.service';
+import { PresenceRegistry } from '../../realtime/interfaces/presence-registry';
 import { NotificationType } from '../constants/notification-type.enum';
 import { DeviceTokenRepository } from '../interfaces/device-token-repository';
 import { NotificationRepository } from '../interfaces/notification-repository';
@@ -63,6 +64,7 @@ describe('NotificationService', () => {
   };
   const pushDispatcher = { dispatch: jest.fn() };
   const eventBus = { register: jest.fn() };
+  const presence = { isUserOnline: jest.fn() };
   const logger = {
     setContext: jest.fn(),
     log: jest.fn(),
@@ -77,7 +79,7 @@ describe('NotificationService', () => {
   let service: NotificationService;
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     const moduleRef = await Test.createTestingModule({
       providers: [
         NotificationService,
@@ -85,6 +87,7 @@ describe('NotificationService', () => {
         { provide: DeviceTokenRepository, useValue: devices },
         { provide: PushDispatcher, useValue: pushDispatcher },
         { provide: TaskEventBus, useValue: eventBus },
+        { provide: PresenceRegistry, useValue: presence },
         { provide: LoggerService, useValue: logger },
       ],
     }).compile();
@@ -104,6 +107,7 @@ describe('NotificationService', () => {
         { id: 'd1', token: 'tok-a' },
         { id: 'd2', token: 'tok-b' },
       ]);
+      presence.isUserOnline.mockReturnValue(false);
 
       await service.handle(makeEvent(TaskEventType.TASK_CREATED));
 
@@ -144,6 +148,22 @@ describe('NotificationService', () => {
 
       await service.handle(makeEvent(TaskEventType.TASK_UPDATED));
 
+      expect(notifications.create).toHaveBeenCalledTimes(1);
+      expect(pushDispatcher.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('writes the row but suppresses the push when the user is online', async () => {
+      notifications.findByEventId.mockResolvedValue(null);
+      notifications.create.mockResolvedValue(baseNotification);
+      devices.findByUser.mockResolvedValue([
+        { id: 'd1', token: 'tok-a' },
+        { id: 'd2', token: 'tok-b' },
+      ]);
+      presence.isUserOnline.mockReturnValue(true);
+
+      await service.handle(makeEvent(TaskEventType.TASK_CREATED));
+
+      expect(presence.isUserOnline).toHaveBeenCalledWith(OWNER);
       expect(notifications.create).toHaveBeenCalledTimes(1);
       expect(pushDispatcher.dispatch).not.toHaveBeenCalled();
     });

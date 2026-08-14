@@ -109,4 +109,16 @@ export default () => ({
     enforce:
       (process.env.APP_CHECK_ENFORCE ?? 'false').toLowerCase() === 'true',
   },
+  realtime: {
+    /**
+     * Per-user budget for client→server socket messages (currently the
+     * comment "typing" indicator). The HTTP ThrottlerGuard never runs for
+     * gateways, so the realtime gateway enforces this fixed window itself.
+     */
+    eventRateLimit: parseInt(process.env.REALTIME_EVENT_RATE_LIMIT ?? '60', 10),
+    eventRateTtlMs: parseInt(
+      process.env.REALTIME_EVENT_RATE_TTL_MS ?? '30000',
+      10,
+    ),
+  },
 });

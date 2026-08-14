@@ -32,6 +32,10 @@ export class TypeOrmMemberRepository extends MemberRepository {
     });
   }
 
+  listByUser(userId: string): Promise<TeamMemberEntity[]> {
+    return this.repo.find({ where: { userId } });
+  }
+
   create(data: {
     teamId: string;
     userId: string;

@@ -16,6 +16,12 @@ export abstract class MemberRepository {
 
   abstract listByTeam(teamId: string): Promise<TeamMemberEntity[]>;
 
+  /**
+   * Every team the user currently belongs to, used by the realtime gateway to
+   * auto-join the user's team rooms and by presence to target broadcasts.
+   */
+  abstract listByUser(userId: string): Promise<TeamMemberEntity[]>;
+
   abstract create(data: {
     teamId: string;
     userId: string;

@@ -59,6 +59,10 @@ export const validationSchema = Joi.object({
   // deliberate, separate decision later (see configuration.ts).
   APP_CHECK_ENFORCE: Joi.boolean().truthy('true').falsy('false').default(false),
 
+  // Realtime (Socket.IO). Per-user budget for client→server socket messages.
+  REALTIME_EVENT_RATE_LIMIT: Joi.number().integer().min(1).default(60),
+  REALTIME_EVENT_RATE_TTL_MS: Joi.number().integer().min(1000).default(30000),
+
   // Deep linking (Round 4). Placeholders until a real HTTPS domain exists.
   DEEP_LINK_BASE_URL: Joi.string().uri().default('https://tasko.example'),
   APPLE_TEAM_ID: Joi.string().allow('').default('TEAM_ID_PLACEHOLDER'),

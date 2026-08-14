@@ -35,6 +35,7 @@ import { HealthModule } from './modules/health/health.module';
 import { InvitationModule } from './modules/invitation/invitation.module';
 import { MemberModule } from './modules/member/member.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { SearchModule } from './modules/search/search.module';
 import { TagModule } from './modules/tag/tag.module';
@@ -86,6 +87,7 @@ import { UserModule } from './modules/user/user.module';
     InvitationModule,
     DeepLinkModule,
     CommentModule,
+    RealtimeModule,
     SearchModule,
     AnalyticsModule,
     AdminModule,

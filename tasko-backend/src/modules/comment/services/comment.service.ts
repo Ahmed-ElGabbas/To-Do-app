@@ -61,6 +61,7 @@ export class CommentService {
         type: TaskEventType.COMMENT_ADDED,
         userId: task.userId,
         taskId: task.id,
+        teamId: task.teamId ?? undefined,
         occurredAt: new Date().toISOString(),
         data: {
           title: task.title,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tasko/core/constants/sizes.dart';
@@ -6,10 +7,15 @@ import 'package:tasko/core/network/models/comment.dart';
 import 'package:tasko/core/theme/text_styles.dart';
 import 'package:tasko/features/auth/state/auth_provider.dart';
 import 'package:tasko/features/collaboration/state/comment_provider.dart';
+import 'package:tasko/shared/services/realtime_service.dart';
 
 /// Comments on a single task (list + composer). Comment editing/deletion is
 /// restricted to the author in the UI; the backend also allows team
 /// editors/owners to modify any comment on a team task.
+///
+/// R7: subscribes to the realtime service in `initState` for live comments and
+/// typing indicators, and relays the local typing state with [sendTyping].
+/// No-op when [RealtimeService.instance] is null (widget tests).
 class CommentsScreen extends StatefulWidget {
   const CommentsScreen({super.key, required this.taskId});
 
@@ -23,8 +29,32 @@ class _CommentsScreenState extends State<CommentsScreen> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
+  VoidCallback? _commentUnsub;
+  VoidCallback? _typingUnsub;
+  final Set<String> _typingUserIds = {};
+  final Map<String, Timer> _typingTimers = {};
+  Timer? _typingIdleTimer;
+  bool _lastSentTyping = false;
+  late final CommentProvider _commentProvider;
+
+  @override
+  void initState() {
+    super.initState();
+    _commentProvider = CommentProvider()..load(widget.taskId);
+    final realtime = RealtimeService.instance;
+    _commentUnsub = realtime?.subscribeComment(_onRealtimeComment);
+    _typingUnsub = realtime?.subscribeTyping(_onRealtimeTyping);
+  }
+
   @override
   void dispose() {
+    _commentUnsub?.call();
+    _typingUnsub?.call();
+    _typingIdleTimer?.cancel();
+    for (final timer in _typingTimers.values) {
+      timer.cancel();
+    }
+    _commentProvider.dispose();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -35,8 +65,8 @@ class _CommentsScreenState extends State<CommentsScreen> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
 
-    return ChangeNotifierProvider(
-      create: (_) => CommentProvider()..load(widget.taskId),
+    return ChangeNotifierProvider.value(
+      value: _commentProvider,
       child: Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
         appBar: AppBar(
@@ -64,6 +94,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
                     _buildBody(context, provider),
               ),
             ),
+            if (_typingUserIds.isNotEmpty) _buildTypingIndicator(context),
             Consumer<CommentProvider>(
               builder: (context, provider, _) => _buildComposer(context, provider),
             ),
@@ -216,6 +247,7 @@ class _CommentsScreenState extends State<CommentsScreen> {
               minLines: 1,
               maxLines: 4,
               textCapitalization: TextCapitalization.sentences,
+              onChanged: _onTypingChanged,
               decoration: InputDecoration(
                 hintText: l10n.get('comment_hint'),
                 filled: true,
@@ -244,6 +276,95 @@ class _CommentsScreenState extends State<CommentsScreen> {
                     ),
                   )
                 : Icon(Icons.send_rounded, color: theme.primaryColor),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Realtime (R7) ──────────────────────────────────────────────────────────
+
+  void _onRealtimeComment(RealtimeEnvelope envelope) {
+    _commentProvider.applyRealtimeComment(envelope);
+  }
+
+  void _onRealtimeTyping(RealtimeEnvelope envelope) {
+    if (!mounted) return;
+    if (envelope.payload['taskId'] != widget.taskId) return;
+    final userId = envelope.payload['userId'];
+    final isTyping = envelope.payload['isTyping'] == true;
+    if (userId is! String || userId.isEmpty) return;
+    final currentUserId = Provider.of<AuthProvider>(context, listen: false).userId;
+    if (userId == currentUserId) return;
+
+    _typingTimers[userId]?.cancel();
+    if (isTyping) {
+      _typingUserIds.add(userId);
+      _typingTimers[userId] = Timer(const Duration(seconds: 4), () {
+        if (!mounted) return;
+        setState(() {
+          _typingUserIds.remove(userId);
+          _typingTimers.remove(userId);
+        });
+      });
+    } else {
+      _typingUserIds.remove(userId);
+      _typingTimers.remove(userId);
+    }
+    setState(() {});
+  }
+
+  /// Sends `typing: true` once when text becomes non-empty, and a trailing
+  /// `typing: false` after 3s idle (or immediately when cleared). The server
+  /// rate-limits and stamps the real userId.
+  void _onTypingChanged(String value) {
+    final typing = value.trim().isNotEmpty;
+    _typingIdleTimer?.cancel();
+    if (typing && !_lastSentTyping) {
+      RealtimeService.instance?.sendTyping(taskId: widget.taskId, isTyping: true);
+      _lastSentTyping = true;
+    }
+    if (typing) {
+      _typingIdleTimer = Timer(const Duration(seconds: 3), () {
+        if (!mounted) return;
+        _lastSentTyping = false;
+        RealtimeService.instance?.sendTyping(
+          taskId: widget.taskId,
+          isTyping: false,
+        );
+      });
+    } else if (_lastSentTyping) {
+      _lastSentTyping = false;
+      RealtimeService.instance?.sendTyping(taskId: widget.taskId, isTyping: false);
+    }
+  }
+
+  Widget _buildTypingIndicator(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSizes.lg,
+        AppSizes.xs,
+        AppSizes.lg,
+        0,
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: theme.primaryColor,
+            ),
+          ),
+          const SizedBox(width: AppSizes.sm),
+          Text(
+            l10n.get('someone_is_typing'),
+            style: AppTextStyles.caption.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
           ),
         ],
       ),

@@ -9,6 +9,7 @@ import {
 } from '../../../infrastructure/events/task-event';
 import { TaskEventConsumer } from '../../../infrastructure/events/task-event.consumer';
 import { TaskEventBus } from '../../../infrastructure/events/task-event-bus.service';
+import { PresenceRegistry } from '../../realtime/interfaces/presence-registry';
 import { NotificationType } from '../constants/notification-type.enum';
 import { NotificationData } from '../entities/notification.entity';
 import { NotificationRepository } from '../interfaces/notification-repository';
@@ -34,6 +35,7 @@ export class NotificationService implements TaskEventConsumer, OnModuleInit {
     private readonly devices: DeviceTokenRepository,
     private readonly pushDispatcher: PushDispatcher,
     private readonly eventBus: TaskEventBus,
+    private readonly presence: PresenceRegistry,
     private readonly logger: LoggerService,
   ) {
     this.logger.setContext('Notifications');
@@ -96,8 +98,11 @@ export class NotificationService implements TaskEventConsumer, OnModuleInit {
       data: buildNotificationData(event),
     });
 
+    // Socket.IO ⇄ FCM handoff (plan Section 2.4): the notification row is
+    // always written (the inbox is the persistent record), but the push is
+    // skipped when the recipient has a live socket — they just saw the event.
     const devices = await this.devices.findByUser(event.userId);
-    if (devices.length > 0) {
+    if (devices.length > 0 && !this.presence.isUserOnline(event.userId)) {
       await this.pushDispatcher.dispatch({
         deviceTokens: devices.map((device) => device.token),
         title: notification.title,

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tasko/features/collaboration/state/team_provider.dart';
 import 'package:tasko/shared/services/analytics_service.dart';
 import 'package:tasko/shared/services/crashlytics_service.dart';
+import 'package:tasko/shared/services/realtime_service.dart';
 
 import 'core/network/test_services.dart';
 
@@ -279,5 +280,64 @@ void main() {
 
     expect(sent, isTrue);
     expect(tracker.events.single.name, 'invitation_sent');
+  });
+
+  group('presence', () {
+    RealtimeEnvelope presenceEnv(String event, String userId) =>
+        RealtimeEnvelope(
+          eventName: event,
+          eventId: 'evt',
+          occurredAt: '2026-01-01T00:00:00.000Z',
+          actorUserId: 'u-1',
+          payload: {'userId': userId},
+        );
+
+    test('user.online/user.offline track membership', () {
+      final backend =
+          TestBackend((options, attempt) => throw StateError('no request'));
+      final provider = TeamProvider(services: backend.services);
+
+      provider.applyPresence(presenceEnv('user.online', 'u1'));
+      expect(provider.isOnline('u1'), isTrue);
+      expect(provider.onlineUserIds, {'u1'});
+
+      provider.applyPresence(presenceEnv('user.offline', 'u1'));
+      expect(provider.isOnline('u1'), isFalse);
+      expect(provider.onlineUserIds, isEmpty);
+    });
+
+    test('only notifies when the membership set actually changes', () {
+      final backend =
+          TestBackend((options, attempt) => throw StateError('no request'));
+      final provider = TeamProvider(services: backend.services);
+      var notifications = 0;
+      provider.addListener(() => notifications++);
+
+      provider.applyPresence(presenceEnv('user.online', 'u1'));
+      provider.applyPresence(presenceEnv('user.online', 'u1'));
+      provider.applyPresence(presenceEnv('user.offline', 'u2'));
+      provider.applyPresence(presenceEnv('user.offline', 'u1'));
+
+      expect(notifications, 2);
+    });
+
+    test('a malformed payload is ignored', () {
+      final backend =
+          TestBackend((options, attempt) => throw StateError('no request'));
+      final provider = TeamProvider(services: backend.services);
+      var notifications = 0;
+      provider.addListener(() => notifications++);
+
+      provider.applyPresence(RealtimeEnvelope(
+        eventName: 'user.online',
+        eventId: 'evt',
+        occurredAt: '2026-01-01T00:00:00.000Z',
+        actorUserId: 'u-1',
+        payload: const {},
+      ));
+
+      expect(notifications, 0);
+      expect(provider.onlineUserIds, isEmpty);
+    });
   });
 }
